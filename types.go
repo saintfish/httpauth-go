@@ -1,3 +1,7 @@
+// Copyright 2012 Robert W. Johnstone. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package httpauth
 
 import (
@@ -5,9 +9,23 @@ import (
 )
 
 // An Authenticator is a caller supplied closure that can check the authorization
-// of username/password pairs.  The function should return true only if the 
-// credentials can be successfully validated.
+// of user's credentials (i.e. a username and password pair).  The function should 
+// return true only if the credentials can be successfully validated.
 type Authenticator func(username, password string) bool
+
+// A PasswordLookup is a caller supplied closure that can find the password
+// for a supplied username.  The function should return a empty string if 
+// the user's password could not be determined.
+type PasswordLookup func(username string) string
+
+// Authenticator converts the password lookup function into a closure
+// that validates a username/password pair.
+func (p PasswordLookup) Authenticator() Authenticator {
+	return func(username, password string) bool {
+		pwd := p(username)
+		return pwd != "" && password == pwd
+	}
+}
 
 // A Policy is a type that implements a HTTP authentication scheme.  Two 
 // standard schemes are the basic authentication scheme and the digest 

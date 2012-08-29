@@ -9,41 +9,41 @@ import (
 	"io/ioutil"
 	"net/http"
 	"testing"
-	"time"
 )
 
 var (
-	basicAuth *Basic
-)
-
-const (
-	port    string = ":8088"
-	html401 string = "<html><body><h1>Unauthorized</h1></body></html>"
+	digestAuth *Digest
+	success    chan bool
 )
 
 func init() {
-	basicAuth = NewBasic("golang", func(username, password string) bool {
-		return username == password
+	var err error
+	digestAuth, err = NewDigest("golang", func(username string) string {
+		return username
 	})
+	if err != nil {
+		panic(err)
+	}
 
-	http.HandleFunc("/basic/", basicHandler)
-	go http.ListenAndServe(port, nil)
-	time.Sleep(1 * time.Second)
+	success = make(chan bool)
+
+	http.HandleFunc("/digest/", digestHandler)
 }
 
-func basicHandler(w http.ResponseWriter, r *http.Request) {
-	username := basicAuth.Authorize(r)
+func digestHandler(w http.ResponseWriter, r *http.Request) {
+	username := digestAuth.Authorize(r)
 	if username == "" {
-		basicAuth.NotifyAuthRequired(w)
+		digestAuth.NotifyAuthRequired(w)
 		fmt.Fprintf(w, html401)
 		return
 	}
 
 	fmt.Fprintf(w, "<html><body><h1>Hello</h1><p>Welcome, %s</p></body></html>", username)
+	success <- true
 }
 
-func TestBasicNoAuth(t *testing.T) {
-	resp, err := http.Get("http://localhost" + port + "/basic/")
+func TestDigestNoAuth(t *testing.T) {
+	resp, err := http.Get("http://localhost" + port + "/digest/")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -65,8 +65,8 @@ func TestBasicNoAuth(t *testing.T) {
 
 }
 
-func TestBasicBadAuth(t *testing.T) {
-	resp, err := http.Get("http://user:pass@localhost" + port + "/basic/")
+func TestDigestBadAuth(t *testing.T) {
+	resp, err := http.Get("http://user:pass@localhost" + port + "/digest/")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -88,8 +88,8 @@ func TestBasicBadAuth(t *testing.T) {
 
 }
 
-func TestBasicGoodAuth(t *testing.T) {
-	resp, err := http.Get("http://user:user@localhost" + port + "/basic/")
+/*func TestDigestGoodAuth(t *testing.T) {
+	resp, err := http.Get("http://user:user@localhost" + port + "/digest/")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -109,18 +109,8 @@ func TestBasicGoodAuth(t *testing.T) {
 		t.Errorf("Incorrect body text.")
 	}
 
-}
+}*/
 
-func TestBasicCredientials(t *testing.T) {
-	resp, err := http.Get("http://user:pass@localhost" + port + "/basic/")
-	if err != nil {
-		t.Fatalf("Error:  %s", err)
-	}
-	defer resp.Body.Close()
-
-	token := resp.Request.Header.Get("Authorization")
-	username, password := basicAuth.ParseToken(token)
-	if username != "user" || password != "pass" {
-		t.Errorf("auth.Credentials returned incorrect values.")
-	}
+func TestDigestBrowser(t *testing.T) {
+	<-success
 }

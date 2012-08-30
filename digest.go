@@ -22,40 +22,40 @@ const (
 	DefaultClientCacheResidence = 1 * time.Hour
 )
 
-type clientInfo struct {
+type digestClientInfo struct {
 	numContacts uint64 // number of client connects
 	lastContact int64  // time of last communication with this client (unix nanoseconds)
 	nonce       string // unique per client salt
 }
 
-type priorityQueue []*clientInfo
+type digestPriorityQueue []*digestClientInfo
 
-func (pq priorityQueue) Len() int {
+func (pq digestPriorityQueue) Len() int {
 	return len(pq)
 }
 
-func (pq priorityQueue) Less(i,j int) bool {
+func (pq digestPriorityQueue) Less(i, j int) bool {
 	return pq[i].lastContact < pq[j].lastContact
 }
 
-func (pq priorityQueue) Swap(i,j int) {
+func (pq digestPriorityQueue) Swap(i, j int) {
 	pq[i], pq[j] = pq[j], pq[i]
 }
 
-func (pq *priorityQueue) Push(x interface{}) {
-	*pq = append( *pq, x.(*clientInfo) )
+func (pq *digestPriorityQueue) Push(x interface{}) {
+	*pq = append(*pq, x.(*digestClientInfo))
 }
 
-func (pq *priorityQueue) Pop() interface{} {
+func (pq *digestPriorityQueue) Pop() interface{} {
 	n := len(*pq)
-	ret := (*pq)[ n-1 ]
+	ret := (*pq)[n-1]
 	*pq = (*pq)[:n-1]
 	return ret
 }
 
-func (pq priorityQueue) MinValue() int64 {
+func (pq digestPriorityQueue) MinValue() int64 {
 	n := len(pq)
-	return pq[ n-1 ].lastContact
+	return pq[n-1].lastContact
 }
 
 // A Digest is a policy for authenticating users using the digest authentication scheme.
@@ -70,8 +70,8 @@ type Digest struct {
 	// CientCacheResidence controls how long client information is retained
 	ClientCacheResidence time.Duration
 
-	clients map[string]*clientInfo
-	lru	priorityQueue
+	clients map[string]*digestClientInfo
+	lru     digestPriorityQueue
 	md5     hash.Hash
 }
 
@@ -106,7 +106,7 @@ func NewDigest(realm string, auth PasswordLookup) (*Digest, error) {
 		auth,
 		nonce,
 		DefaultClientCacheResidence,
-		make(map[string]*clientInfo),
+		make(map[string]*digestClientInfo),
 		nil,
 		md5.New()}, nil
 }
@@ -116,10 +116,9 @@ func (a *Digest) evictLeastRecentlySeen() {
 
 	// Remove all entries from the client cache older than the
 	// residence time.
-	for len(a.lru)>0 && a.lru.MinValue() + a.ClientCacheResidence.Nanoseconds() <= now {
-		client := heap.Pop( &a.lru ).(*clientInfo)
-		delete( a.clients, client.nonce )
-		println( "Evict %p", client )
+	for len(a.lru) > 0 && a.lru.MinValue()+a.ClientCacheResidence.Nanoseconds() <= now {
+		client := heap.Pop(&a.lru).(*digestClientInfo)
+		delete(a.clients, client.nonce)
 	}
 }
 
@@ -211,9 +210,9 @@ func (a *Digest) NotifyAuthRequired(w http.ResponseWriter) {
 		http.Error(w, "Internal server error.", http.StatusInternalServerError)
 		return
 	}
-	ci := &clientInfo{0, time.Now().UnixNano(), nonce}
+	ci := &digestClientInfo{0, time.Now().UnixNano(), nonce}
 	a.clients[nonce] = ci
-	heap.Push( &a.lru, ci )
+	heap.Push(&a.lru, ci)
 
 	// Create the header
 	hdr := `Digest realm="` + a.Realm + `", nonce="` + nonce + `", opaque="` +

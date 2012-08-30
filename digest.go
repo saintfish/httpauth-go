@@ -5,43 +5,57 @@
 package httpauth
 
 import (
+	"container/heap"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"hash"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	// The default value for ClientCacheSize used when create new Digest instances.
-	DefaultClientCacheSize = int(512)
-	// The default value for ClientCacheDelta used when create new Digest instances.
-	DefaultClientCacheDelta = int(32)
+	// The default value for ClientCacheResidence used when creating new Digest instances.
+	DefaultClientCacheResidence = 1 * time.Hour
 )
 
 type clientInfo struct {
 	numContacts uint64 // number of client connects
-	lastContact int64  // time of last communication with this client
+	lastContact int64  // time of last communication with this client (unix nanoseconds)
 	nonce       string // unique per client salt
 }
 
-type clientInfoSlice []*clientInfo
+type priorityQueue []*clientInfo
 
-func (c clientInfoSlice) Len() int {
-	return len(c)
+func (pq priorityQueue) Len() int {
+	return len(pq)
 }
 
-func (c clientInfoSlice) Less(i, j int) bool {
-	return c[i].lastContact < c[j].lastContact
+func (pq priorityQueue) Less(i,j int) bool {
+	return pq[i].lastContact < pq[j].lastContact
 }
 
-func (c clientInfoSlice) Swap(i, j int) {
-	c[i], c[j] = c[j], c[i]
+func (pq priorityQueue) Swap(i,j int) {
+	pq[i], pq[j] = pq[j], pq[i]
+}
+
+func (pq *priorityQueue) Push(x interface{}) {
+	*pq = append( *pq, x.(*clientInfo) )
+}
+
+func (pq *priorityQueue) Pop() interface{} {
+	n := len(*pq)
+	ret := (*pq)[ n-1 ]
+	*pq = (*pq)[:n-1]
+	return ret
+}
+
+func (pq priorityQueue) MinValue() int64 {
+	n := len(pq)
+	return pq[ n-1 ].lastContact
 }
 
 // A Digest is a policy for authenticating users using the digest authentication scheme.
@@ -53,12 +67,11 @@ type Digest struct {
 	// This is a nonce used by the HTTP server to prevent dictionary attacks
 	opaque string
 
-	// ClientCacheSize controls how large the client cache can grow.
-	ClientCacheSize int
-	// ClientCacheDelta controls how frequently the client cache is trimmed.
-	ClientCacheDelta int
+	// CientCacheResidence controls how long client information is retained
+	ClientCacheResidence time.Duration
 
 	clients map[string]*clientInfo
+	lru	priorityQueue
 	md5     hash.Hash
 }
 
@@ -92,24 +105,21 @@ func NewDigest(realm string, auth PasswordLookup) (*Digest, error) {
 		realm,
 		auth,
 		nonce,
-		DefaultClientCacheSize,
-		DefaultClientCacheDelta,
+		DefaultClientCacheResidence,
 		make(map[string]*clientInfo),
+		nil,
 		md5.New()}, nil
 }
 
 func (a *Digest) evictLeastRecentlySeen() {
-	table := make([]*clientInfo, len(a.clients))
-	i := 0
-	for _, client := range a.clients {
-		table[i] = client
-		i++
-	}
+	now := time.Now().UnixNano()
 
-	sort.Sort(clientInfoSlice(table))
-
-	for _, client := range table[:2*a.ClientCacheDelta] {
-		delete(a.clients, client.nonce)
+	// Remove all entries from the client cache older than the
+	// residence time.
+	for len(a.lru)>0 && a.lru.MinValue() + a.ClientCacheResidence.Nanoseconds() <= now {
+		client := heap.Pop( &a.lru ).(*clientInfo)
+		delete( a.clients, client.nonce )
+		println( "Evict %p", client )
 	}
 }
 
@@ -191,9 +201,9 @@ func (a *Digest) Authorize(r *http.Request) (username string) {
 // inform the client of the failed authorization, and which scheme
 // must be used to gain authentication.
 func (a *Digest) NotifyAuthRequired(w http.ResponseWriter) {
-	if len(a.clients) > a.ClientCacheSize+a.ClientCacheDelta {
-		a.evictLeastRecentlySeen()
-	}
+	// Check for old clientInfo, and evict those older than
+	// residence time.
+	a.evictLeastRecentlySeen()
 
 	// Create an entry for the client
 	nonce, err := createNonce()
@@ -201,7 +211,9 @@ func (a *Digest) NotifyAuthRequired(w http.ResponseWriter) {
 		http.Error(w, "Internal server error.", http.StatusInternalServerError)
 		return
 	}
-	a.clients[nonce] = &clientInfo{0, time.Now().UnixNano(), nonce}
+	ci := &clientInfo{0, time.Now().UnixNano(), nonce}
+	a.clients[nonce] = ci
+	heap.Push( &a.lru, ci )
 
 	// Create the header
 	hdr := `Digest realm="` + a.Realm + `", nonce="` + nonce + `", opaque="` +

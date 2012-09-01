@@ -16,17 +16,14 @@ func ExampleNewBasic() {
 	// is simply the username repeated twice.
 	auth := NewBasic("My Website", func(username, password string) bool {
 		return password == username+username
-	})
-
+	}, nil)
 	// The request handler
 	http.HandleFunc("/example/", func(w http.ResponseWriter, r *http.Request) {
 		// Check if the client is authorized
 		username := auth.Authorize(r)
 		if username == "" {
 			// Oops!  Access denied.
-			auth.NotifyAuthRequired(w)
-			// Print out a custom error message
-			fmt.Fprintf(w, html401)
+			auth.NotifyAuthRequired(w,r)
 			return
 		}
 		fmt.Fprintf(w, "<html><body><h1>Hello</h1><p>Welcome, %s</p></body></html>", username)
@@ -48,5 +45,5 @@ func ExamplePasswordLookup_Authenticator() {
 	auth := pl.Authenticator()
 
 	// Create a authentication scheme
-	_ /*policy*/ = NewBasic("My Website", auth)
+	_ /*policy*/ = NewBasic("My Website", auth, nil)
 }

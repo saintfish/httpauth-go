@@ -34,8 +34,7 @@ func init() {
 func cookieHandler(w http.ResponseWriter, r *http.Request) {
 	username := cookieAuth.Authorize(r)
 	if username == "" {
-		cookieAuth.NotifyAuthRequired(w)
-		fmt.Fprintf(w, `<a href="#">Login</a>`, cookieAuth.LoginPage)
+		cookieAuth.NotifyAuthRequired(w, r)
 		return
 	}
 

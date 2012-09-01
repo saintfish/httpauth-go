@@ -17,14 +17,13 @@ var (
 )
 
 const (
-	port    string = ":8088"
-	html401 string = "<html><body><h1>Unauthorized</h1></body></html>"
+	port string = ":8088"
 )
 
 func init() {
 	basicAuth = NewBasic("golang", func(username, password string) bool {
 		return username == password
-	})
+	}, nil)
 
 	http.HandleFunc("/basic/", basicHandler)
 	go http.ListenAndServe(port, nil)
@@ -34,8 +33,7 @@ func init() {
 func basicHandler(w http.ResponseWriter, r *http.Request) {
 	username := basicAuth.Authorize(r)
 	if username == "" {
-		basicAuth.NotifyAuthRequired(w)
-		fmt.Fprintf(w, html401)
+		basicAuth.NotifyAuthRequired(w, r)
 		return
 	}
 
@@ -58,7 +56,7 @@ func TestBasicNoAuth(t *testing.T) {
 		t.Fatalf("Error:  %s", err)
 	}
 
-	if string(buffer) != html401 {
+	if string(buffer) != StatusUnauthorizedHtml {
 		println(string(buffer))
 		t.Errorf("Incorrect body text.")
 	}
@@ -81,7 +79,7 @@ func TestBasicBadAuth(t *testing.T) {
 		t.Fatalf("Error:  %s", err)
 	}
 
-	if string(buffer) != html401 {
+	if string(buffer) != StatusUnauthorizedHtml {
 		println(string(buffer))
 		t.Errorf("Incorrect body text.")
 	}

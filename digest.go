@@ -64,6 +64,8 @@ type Digest struct {
 	Realm string
 	// Auth provides a function or closure that retrieve the password for a given username.
 	Auth PasswordLookup
+	// WriteUnauthorized provides a function or closure that writes out the HTML portion of a unauthorized access response.
+	WriteUnauthorized HtmlWriter
 	// This is a nonce used by the HTTP server to prevent dictionary attacks
 	opaque string
 
@@ -95,15 +97,20 @@ func calcHash(h hash.Hash, data string) string {
 }
 
 // NewDigest creates a new authentication policy that uses the digest authentication scheme.
-func NewDigest(realm string, auth PasswordLookup) (*Digest, error) {
+func NewDigest(realm string, auth PasswordLookup, writer HtmlWriter) (*Digest, error) {
 	nonce, err := createNonce()
 	if err != nil {
 		return nil, err
 	}
 
+	if writer == nil {
+		writer = defaultHtmlWriter
+	}
+
 	return &Digest{
 		realm,
 		auth,
+		writer,
 		nonce,
 		DefaultClientCacheResidence,
 		make(map[string]*digestClientInfo),
@@ -199,7 +206,7 @@ func (a *Digest) Authorize(r *http.Request) (username string) {
 // NotifyAuthRequired adds the headers to the HTTP response to 
 // inform the client of the failed authorization, and which scheme
 // must be used to gain authentication.
-func (a *Digest) NotifyAuthRequired(w http.ResponseWriter) {
+func (a *Digest) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
 	// Check for old clientInfo, and evict those older than
 	// residence time.
 	a.evictLeastRecentlySeen()
@@ -219,4 +226,5 @@ func (a *Digest) NotifyAuthRequired(w http.ResponseWriter) {
 		a.opaque + `", algorithm="MD5", qop="auth"`
 	w.Header().Set("WWW-Authenticate", hdr)
 	w.WriteHeader(http.StatusUnauthorized)
+	a.WriteUnauthorized(w, r)
 }

@@ -7,6 +7,7 @@ package httpauth
 import (
 	"container/heap"
 	"errors"
+	"html"
 	"net/http"
 	"time"
 )
@@ -121,7 +122,7 @@ func (a *Cookie) Authorize(r *http.Request) (username string) {
 //
 // Caller's should consider adding sending an HTML response with a link
 // to the login page for GET requests.
-func (a *Cookie) NotifyAuthRequired(w http.ResponseWriter) {
+func (a *Cookie) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
 	// Check for old clientInfo, and evict those older than
 	// residence time.
 	a.evictLeastRecentlySeen()
@@ -133,10 +134,10 @@ func (a *Cookie) NotifyAuthRequired(w http.ResponseWriter) {
 	// RFC2616 recommends that a short note "SHOULD" be included in the
 	// response because older user agents may not understand 301/307.
 	// Shouldn't send the response for POST or HEAD; that leaves GET.
-	//if r.Method == "GET" {
-	//	note := "<a href=\"" + htmlEscape(urlStr) + "\">" + statusText[code] + "</a>.\n"
-	//	fmt.Fprintln(w, note)
-	//}
+	if r.Method == "GET" {
+		note := "<a href=\"" + html.EscapeString(a.LoginPage) + "\">" + http.StatusText(http.StatusTemporaryRedirect) + "</a>.\n"
+		w.Write([]byte(note))
+	}
 }
 
 // Login checks the credentials of a client, and, if valid, creates a client 

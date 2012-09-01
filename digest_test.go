@@ -20,7 +20,7 @@ func init() {
 	var err error
 	digestAuth, err = NewDigest("golang", func(username string) string {
 		return username
-	})
+	}, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -33,8 +33,7 @@ func init() {
 func digestHandler(w http.ResponseWriter, r *http.Request) {
 	username := digestAuth.Authorize(r)
 	if username == "" {
-		digestAuth.NotifyAuthRequired(w)
-		fmt.Fprintf(w, html401)
+		digestAuth.NotifyAuthRequired(w, r)
 		return
 	}
 
@@ -58,7 +57,7 @@ func TestDigestNoAuth(t *testing.T) {
 		t.Fatalf("Error:  %s", err)
 	}
 
-	if string(buffer) != html401 {
+	if string(buffer) != StatusUnauthorizedHtml {
 		println(string(buffer))
 		t.Errorf("Incorrect body text.")
 	}
@@ -81,7 +80,7 @@ func TestDigestBadAuth(t *testing.T) {
 		t.Fatalf("Error:  %s", err)
 	}
 
-	if string(buffer) != html401 {
+	if string(buffer) != StatusUnauthorizedHtml {
 		println(string(buffer))
 		t.Errorf("Incorrect body text.")
 	}

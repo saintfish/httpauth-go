@@ -5,6 +5,7 @@
 package httpauth
 
 import (
+	"io"
 	"net/http"
 )
 
@@ -27,6 +28,12 @@ func (p PasswordLookup) Authenticator() Authenticator {
 	}
 }
 
+// An HtmlWriter is a function or closure that will write HTML
+// for a response.  A http.ResponseWriter is not used, as normal
+// for other HTTP responses, because the headers are already 
+// provided by the authentication policy. 
+type HtmlWriter func(w io.Writer, ret *http.Request)
+
 // A Policy is a type that implements a HTTP authentication scheme.  Two 
 // standard schemes are the basic authentication scheme and the digest 
 // access authentication scheme.
@@ -39,5 +46,5 @@ type Policy interface {
 	// NotifyAuthRequired adds the headers to the HTTP response to 
 	// inform the client of the failed authorization, and which scheme
 	// must be used to gain authentication.
-	NotifyAuthRequired(w http.ResponseWriter)
+	NotifyAuthRequired(w http.ResponseWriter, r *http.Request)
 }

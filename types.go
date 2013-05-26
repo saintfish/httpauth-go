@@ -42,9 +42,15 @@ type Policy interface {
 	// returns the username only if the credientials could be validated.
 	// If the return value is blank, then the credentials are missing,
 	// invalid, or a system error prevented verification.
+	//
+	// This function can be used to build a handler.  Most users should
+	// probably simply wrap their handler using NewAuthHandler.
 	Authorize(r *http.Request) (username string)
 	// NotifyAuthRequired adds the headers to the HTTP response to 
 	// inform the client of the failed authorization, and which scheme
 	// must be used to gain authentication.
+	//
+	// This function can be used to build a handler.  Most users should
+	// probably simply wrap their handler using NewAuthHandler.
 	NotifyAuthRequired(w http.ResponseWriter, r *http.Request)
 }

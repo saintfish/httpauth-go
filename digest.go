@@ -14,12 +14,15 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
 	// The default value for ClientCacheResidence used when creating new Digest instances.
 	DefaultClientCacheResidence = 1 * time.Hour
+	// The length of a nonce
+	nonceLen = 16
 )
 
 type digestClientInfo struct {
@@ -72,6 +75,7 @@ type Digest struct {
 	// CientCacheResidence controls how long client information is retained
 	ClientCacheResidence time.Duration
 
+	mutex   sync.Mutex
 	clients map[string]*digestClientInfo
 	lru     digestPriorityQueue
 	md5     hash.Hash
@@ -113,6 +117,7 @@ func NewDigest(realm string, auth PasswordLookup, writer HtmlWriter) (*Digest, e
 		writer,
 		nonce,
 		DefaultClientCacheResidence,
+		sync.Mutex{},
 		make(map[string]*digestClientInfo),
 		nil,
 		md5.New()}, nil
@@ -129,25 +134,25 @@ func (a *Digest) evictLeastRecentlySeen() {
 	}
 }
 
-// Authorize retrieves the credientials from the HTTP request, and 
-// returns the username only if the credientials could be validated.
-// If the return value is blank, then the credentials are missing,
-// invalid, or a system error prevented verification.
-func (a *Digest) Authorize(r *http.Request) (username string) {
+func parseDigestAuthHeader(r *http.Request) map[string]string {
+	// Extract the authentication token.
 	token := r.Header.Get("Authorization")
 	if token == "" {
-		return ""
+		return nil
 	}
 
 	// Check that the token supplied corresponds to the digest authorization
-	// protocol
+	// protocol.  If not, return nil to indicate failure.  No error
+	// code is used as a malformed protocol is simply an authentication
+	// failure.
 	ndx := strings.IndexRune(token, ' ')
 	if ndx < 1 || token[0:ndx] != "Digest" {
-		return ""
+		return nil
 	}
 	token = token[ndx+1:]
 
-	// Token is a comma separated list of name/value pairs
+	// Token is a comma separated list of name/value pairs.  Break-out pieces
+	// and fill in a map.
 	params := make(map[string]string)
 	for _, str := range strings.Split(token, ",") {
 		ndx := strings.IndexRune(str, '=')
@@ -161,10 +166,24 @@ func (a *Digest) Authorize(r *http.Request) (username string) {
 		params[name] = value
 	}
 
-	if params["opaque"] != a.opaque || params["algorithm"] != "MD5" || params["qop"] != "auth" {
+	return params
+}
+
+// Authorize retrieves the credientials from the HTTP request, and 
+// returns the username only if the credientials could be validated.
+// If the return value is blank, then the credentials are missing,
+// invalid, or a system error prevented verification.
+func (a *Digest) Authorize(r *http.Request) (username string) {
+	// Extract and parse the token
+	params := parseDigestAuthHeader( r )
+	if params==nil {
 		return ""
 	}
 
+	// Verify the token's parameters
+	if params["opaque"] != a.opaque || params["algorithm"] != "MD5" || params["qop"] != "auth" {
+		return ""
+	}
 	if params["uri"] != r.URL.Path {
 		return ""
 	}
@@ -185,12 +204,30 @@ func (a *Digest) Authorize(r *http.Request) (username string) {
 		return ""
 	}
 
-	// Data is validated.  Find the client info.
+	// Determine the number of contacts that the client believes that
+	// it has had with this serveri.
 	numContacts, err := strconv.ParseUint(params["nc"], 16, 64)
 	if err != nil {
 		return ""
 	}
-	if client, ok := a.clients[params["nonce"]]; ok {
+
+	// Pull out the nonce, and verify
+	nonce, ok := params["nonce"]
+	if !ok || len(nonce)!=nonceLen{
+		return ""
+	}
+
+	// The next block of actions require accessing field internal to the 
+	// digest structure.  Need to lock.
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	// Check for old clientInfo, and evict those older than
+	// residence time.
+	a.evictLeastRecentlySeen()
+
+	// Find the client, and check against authorization parameters.
+	if client, ok := a.clients[nonce]; ok {
 		if client.numContacts != 0 && client.numContacts >= numContacts {
 			return ""
 		}
@@ -207,19 +244,12 @@ func (a *Digest) Authorize(r *http.Request) (username string) {
 // inform the client of the failed authorization, and which scheme
 // must be used to gain authentication.
 func (a *Digest) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
-	// Check for old clientInfo, and evict those older than
-	// residence time.
-	a.evictLeastRecentlySeen()
-
 	// Create an entry for the client
 	nonce, err := createNonce()
 	if err != nil {
 		http.Error(w, "Internal server error.", http.StatusInternalServerError)
 		return
 	}
-	ci := &digestClientInfo{0, time.Now().UnixNano(), nonce}
-	a.clients[nonce] = ci
-	heap.Push(&a.lru, ci)
 
 	// Create the header
 	hdr := `Digest realm="` + a.Realm + `", nonce="` + nonce + `", opaque="` +
@@ -227,4 +257,39 @@ func (a *Digest) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("WWW-Authenticate", hdr)
 	w.WriteHeader(http.StatusUnauthorized)
 	a.WriteUnauthorized(w, r)
+
+	// The next block of actions require accessing field internal to the 
+	// digest structure.  Need to lock.
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	// Add the client info to the LRU.
+	ci := &digestClientInfo{0, time.Now().UnixNano(), nonce}
+	a.clients[nonce] = ci
+	heap.Push(&a.lru, ci)
+}
+
+// Logout removes the nonce associated with the HTTP request from the cache.
+func (a *Digest) Logout(r *http.Request) {
+	// Extract the authentication parameters
+	params := parseDigestAuthHeader( r )
+	if params==nil {
+		return 
+	}
+
+	nonce, ok := params["nonce"]
+	if !ok {
+		return
+	}
+
+	// The next block of actions require accessing field internal to the 
+	// digest structure.  Need to lock.
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	// Use the nonce to find the entry
+	if client, ok := a.clients[nonce]; ok {
+		// Increase the time since last contact, and force an eviction.
+		client.lastContact = 0
+	}
 }

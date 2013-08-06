@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"hash"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -184,8 +185,13 @@ func (a *Digest) Authorize(r *http.Request) (username string) {
 	if params["opaque"] != a.opaque || params["algorithm"] != "MD5" || params["qop"] != "auth" {
 		return ""
 	}
-	if params["uri"] != r.URL.Path {
-		return ""
+
+	// Verify if the requested URI matches auth header
+	switch u, err := url.Parse(params["uri"]); {
+	case err != nil || r.URL == nil:
+		return
+	case r.URL.Path != u.Path:
+		return
 	}
 
 	username = params["username"]
@@ -197,7 +203,7 @@ func (a *Digest) Authorize(r *http.Request) (username string) {
 		return ""
 	}
 	ha1 := calcHash(a.md5, username+":"+a.Realm+":"+password)
-	ha2 := calcHash(a.md5, r.Method+":"+r.URL.Path)
+	ha2 := calcHash(a.md5, r.Method+":"+params["uri"])
 	ha3 := calcHash(a.md5, ha1+":"+params["nonce"]+":"+params["nc"]+
 		":"+params["cnonce"]+":"+params["qop"]+":"+ha2)
 	if ha3 != params["response"] {

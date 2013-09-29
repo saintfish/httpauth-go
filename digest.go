@@ -7,8 +7,6 @@ package httpauth
 import (
 	"container/heap"
 	"crypto/md5"
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"hash"
 	"net/http"
@@ -22,8 +20,6 @@ import (
 const (
 	// The default value for ClientCacheResidence used when creating new Digest instances.
 	DefaultClientCacheResidence = 1 * time.Hour
-	// The length of a nonce
-	nonceLen = 16
 )
 
 type digestClientInfo struct {
@@ -80,19 +76,6 @@ type Digest struct {
 	clients map[string]*digestClientInfo
 	lru     digestPriorityQueue
 	md5     hash.Hash
-}
-
-func createNonce() (string, error) {
-	var buffer [12]byte
-
-	for i := 0; i < len(buffer); {
-		n, err := rand.Read(buffer[i:])
-		if err != nil {
-			return "", err
-		}
-		i += n
-	}
-	return base64.StdEncoding.EncodeToString(buffer[0:]), nil
 }
 
 func calcHash(h hash.Hash, data string) string {

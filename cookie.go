@@ -65,6 +65,8 @@ type Cookie struct {
 	Auth Authenticator
 	// Clients are redirected to the LoginPage when they don't have authorization
 	LoginPage string
+	// Path sets the scope of the authorization cookie
+	Path string
 
 	// CientCacheResidence controls how long client information is retained
 	ClientCacheResidence time.Duration
@@ -81,6 +83,7 @@ func NewCookie(realm, url string, auth Authenticator) *Cookie {
 		realm,
 		auth,
 		url,
+		"/",
 		DefaultClientCacheResidence,
 		sync.Mutex{},
 		make(map[string]*cookieClientInfo),
@@ -204,7 +207,7 @@ func (a *Cookie) LoginWithResponse(w http.ResponseWriter, username, password str
 		return err
 	}
 
-	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: nonce})
+	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: nonce, Path: a.Path})
 	return nil
 }
 

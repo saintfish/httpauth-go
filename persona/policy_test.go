@@ -5,52 +5,39 @@
 package persona
 
 import (
-	httpauth "bitbucket.org/rj/httpauth-go"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
 )
 
 var (
-	auth = NewPolicy( "test", "/index.html" )
-	poicy httpauth.Policy = auth
-	good bool
+	personaAuth *Policy
+	assertion string
+	assertion_ok bool
+	assertion_chan = make( chan string )
 )
 
-func init() {
-	http.HandleFunc( "/auth/login", func (w http.ResponseWriter, r *http.Request) {
-		err := r.ParseForm()
-		if err!=nil {
-			http.Error( w, http.StatusText(http.StatusBadRequest) + "\n" + err.Error(), http.StatusBadRequest )
-			return
-		}
-		err = auth.LoginWithResponse( w, r.Form["assertion"][0], r.Host )
-		if err!=nil {
-			http.Error( w, http.StatusText(http.StatusUnauthorized) + "\n" + err.Error(), http.StatusUnauthorized )
-			return
-		}
-		http.Error( w, http.StatusText(http.StatusOK), http.StatusOK )
-	} )
-
-	http.HandleFunc( "/index.html", func( w http.ResponseWriter, r *http.Request) {
-		w.Write( []byte(
-		`<html>
+const (
+	port string = ":8181"
+	htmlLogin string =
+`<html>
         <head>
 			<title>A page</title>
-<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+			<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
 		</head>
         <body>
 			<h1>Page</h1>
 			<p><a id="signin" href="javascript:mylogin();">Log in</a></p>
-			</form>
 			<script src="https://login.persona.org/include.js"></script>
 			<script>
 function mylogin() {
 	alert( 'Login');
 	navigator.id.request();
-}
-
-currentUser = null
+ }
+ 
+currentUser = null;
 
 navigator.id.watch({
   loggedInUser: currentUser,
@@ -60,9 +47,9 @@ navigator.id.watch({
     // 2. Update your UI.
     $.ajax({ /* <-- This example uses jQuery, but you can use whatever you'd like */
       type: 'POST',
-      url: '/auth/login', // This is a URL on your website.
+      url: '/persona/login2/', // This is a URL on your website.
       data: {assertion: assertion},
-      success: function(res, status, xhr) { alert("Login success: " + status ); /*window.location.reload();*/ },
+      success: function(res, status, xhr) { alert("Login success: " + status ); },
       error: function(xhr, status, err) {
         navigator.id.logout();
         alert("Login failure: " + err);
@@ -76,40 +63,111 @@ navigator.id.watch({
     // (That's a literal JavaScript null. Not false, 0, or undefined. null.)
     $.ajax({
       type: 'POST',
-      url: '/auth/logout', // This is a URL on your website.
+      url: '/persona/login2/', // This is a URL on your website.
       success: function(res, status, xhr) { window.location.reload(); },
       error: function(xhr, status, err) { alert("Logout failure: " + err); }
     });
   }
-});			</script>
+
+});			
+</script>
 		</body>
-		</html>` ))
-	} )
+		</html>`
+)
 
-	http.HandleFunc( "/data.html", func( w http.ResponseWriter, r *http.Request) {
-		username := auth.Authorize(r)
-		if username=="" {
-			auth.NotifyAuthRequired(w,r)
-			return
-		}
-		w.Write( []byte("SECRETE DATA") )
-		good = true
-	} )
+func init() {
+	personaAuth = NewPolicy("golang", "/persona/login/")
 
-	http.HandleFunc( "/", func( w http.ResponseWriter, r *http.Request) {
-		http.Error( w, http.StatusText(http.StatusNotFound), http.StatusNotFound )
-	} )
+	http.HandleFunc("/persona/login/", personaLoginHandler)
+	http.HandleFunc("/persona/login2/", personaLogin2Handler)
+	http.HandleFunc("/persona/", personaHandler)
+	go http.ListenAndServe(port, nil)
+	time.Sleep(2 * time.Second)
 }
-		
 
-func TestVerify(t *testing.T) {
-	err := http.ListenAndServe( ":8181", nil )
-	if err!=nil {
-		println( err.Error() )
+func personaHandler(w http.ResponseWriter, r *http.Request) {
+	username := personaAuth.Authorize(r)
+	if username == "" {
+		personaAuth.NotifyAuthRequired(w, r)
 		return
 	}
-	for !good {
-		time.Sleep( 1 * time.Second )
+
+	fmt.Fprintf(w, `<html><body><h1>Header</h1><p>Some text</p></body></html>` )
+}
+
+func personaLoginHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, htmlLogin)
+}
+
+func personaLogin2Handler(w http.ResponseWriter, r *http.Request) {
+		err := r.ParseForm()
+		if err!=nil {
+			http.Error( w, http.StatusText(http.StatusBadRequest) + "\n" + err.Error(), http.StatusBadRequest )
+			return
+		}
+		err = personaAuth.LoginWithResponse( w, r.Form["assertion"][0], r.Host )
+		if err!=nil {
+			http.Error( w, http.StatusText(http.StatusUnauthorized) + "\n" + err.Error(), http.StatusUnauthorized )
+			return
+		}
+		assertion_chan <- r.Form["assertion"][0]
+		http.Error( w, http.StatusText(http.StatusOK), http.StatusOK )
+}
+
+func TestPolicyNoAuth(t *testing.T) {
+	resp, err := http.Get("http://localhost" + port + "/persona/")
+	if err != nil {
+		t.Fatalf("Error:  %s", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Received incorrect status: %d", resp.StatusCode)
+	}
+	if resp.Request.URL.String() != "http://localhost"+port+"/persona/login/" {
+		t.Errorf("Received incorrect page: %s", resp.Request.URL.String())
+	}
+
+	buffer, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Error:  %s", err)
+	}
+
+	if string(buffer) != htmlLogin {
+		t.Errorf("Incorrect body text.")
+	}
+
+}
+
+func TestPauseForCredentials(t *testing.T) {
+	fmt.Println( "Waiting for assertion.  Please use web browser." )
+	assertion = <-assertion_chan
+	fmt.Println( "Assertion received." )
+}
+
+func TestPersonaLogin(t *testing.T) {
+	nonce1, err := personaAuth.Login(assertion, "localhost"+port)
+	if err != nil {
+		t.Fatalf("Error:  %s", err)
+	}
+
+	nonce2, err := personaAuth.Login(assertion, "localhost"+port)
+	if err != nil {
+		t.Fatalf("Error:  %s", err)
+	}
+
+	if nonce1 != nonce2 {
+		t.Errorf("Error when login twice using the same username.")
 	}
 }
-	
+
+
+func TestPersonaLogout(t *testing.T) {
+	nonce, err := personaAuth.Login(assertion, "localhost"+port)
+	if err != nil {
+		t.Fatalf("Error:  %s", err)
+	}
+
+	personaAuth.Logout(nonce)
+}
+

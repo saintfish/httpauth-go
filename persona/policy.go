@@ -18,7 +18,7 @@ const (
 	// The default value for ClientCacheResidence used when creating new Digest instances.
 	DefaultClientCacheResidence = 1 * time.Hour
 	// The cookie name used to store authorization information
-	cookieName = "AuthorizationNonce"
+	cookieName = "Authorization"
 )
 
 var (
@@ -113,14 +113,8 @@ func (a *Policy) evictLeastRecentlySeen() {
 // If the return value is blank, then the credentials are missing,
 // invalid, or a system error prevented verification.
 func (a *Policy) Authorize(r *http.Request) (username string) {
-	fmt.Println( "Printing cookies" )
-	for _, v := range r.Cookies() {
-		fmt.Println( "\tc:", v.Name, v.Value )
-	}
-
 	// Find the nonce used to identify a client
 	token, err := r.Cookie(cookieName)
-	fmt.Println( "Authorize:", token, err )
 	if err != nil || token.Value == "" {
 		return ""
 	}
@@ -174,7 +168,6 @@ func (a *Policy) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
 //
 // If the credentials cannot be verified, an error will be returned (ErrBadUsernameOrPassword).
 func (a *Policy) Login(assertion, audience string) (nonce string, err error) {
-	fmt.Println( "Login:", assertion[:20], audience )
 	// Authorize the user
 	user, err := Verify(assertion, audience)
 	if err!=nil {
@@ -216,13 +209,11 @@ func (a *Policy) Login(assertion, audience string) (nonce string, err error) {
 // returned.  The caller is then responsable for creating an appropriate reponse to
 // the HTTP request.
 func (a *Policy) LoginWithResponse(w http.ResponseWriter, assertion, audience string) error {
-	fmt.Println( "LoginWithResponse:", assertion[:20], audience )
 	nonce, err := a.Login(assertion, audience)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println( "\tNonce:", nonce)
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: nonce, Path: a.Path})
 	return nil
 }

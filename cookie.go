@@ -9,6 +9,7 @@ import (
 	"errors"
 	"html"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -68,6 +69,7 @@ type Cookie struct {
 	// CientCacheResidence controls how long client information is retained
 	ClientCacheResidence time.Duration
 
+	mutex   sync.Mutex
 	clientsByNonce map[string]*cookieClientInfo
 	clientsByUser  map[string]*cookieClientInfo
 	lru            cookiePriorityQueue
@@ -80,6 +82,7 @@ func NewCookie(realm, url string, auth Authenticator) *Cookie {
 		auth,
 		url,
 		DefaultClientCacheResidence,
+		sync.Mutex{},
 		make(map[string]*cookieClientInfo),
 		make(map[string]*cookieClientInfo),
 		nil}
@@ -107,6 +110,13 @@ func (a *Cookie) Authorize(r *http.Request) (username string) {
 	if err != nil || token.Value == "" {
 		return ""
 	}
+	if len(token.Value)!=nonceLen {
+		return ""
+	}
+
+	// Lock before mutating the fields of the policy
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
 
 	// Do we have a client with that nonce?
 	if client, ok := a.clientsByNonce[token.Value]; ok {
@@ -123,10 +133,6 @@ func (a *Cookie) Authorize(r *http.Request) (username string) {
 // Caller's should consider adding sending an HTML response with a link
 // to the login page for GET requests.
 func (a *Cookie) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
-	// Check for old clientInfo, and evict those older than
-	// residence time.
-	a.evictLeastRecentlySeen()
-
 	// This code is derived from http.Redirect
 	w.Header().Set("Location", a.LoginPage)
 	w.WriteHeader(http.StatusTemporaryRedirect)
@@ -138,6 +144,14 @@ func (a *Cookie) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
 		note := "<a href=\"" + html.EscapeString(a.LoginPage) + "\">" + http.StatusText(http.StatusTemporaryRedirect) + "</a>.\n"
 		w.Write([]byte(note))
 	}
+
+	// Lock before mutating the fields of the policy
+	a.mutex.Lock()
+	defer a.mutex.Unlock()	
+
+	// Check for old clientInfo, and evict those older than
+	// residence time.
+	a.evictLeastRecentlySeen()
 }
 
 // Login checks the credentials of a client, and, if valid, creates a client
@@ -151,17 +165,22 @@ func (a *Cookie) Login(username, password string) (nonce string, err error) {
 		return "", ErrBadUsernameOrPassword
 	}
 
+	// Create an entry for this user
+	nonce, err = createNonce()
+	if err != nil {
+		return "", err
+	}
+
+	// Lock before mutating the fields of the policy
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
 	// Check if there is already a session for this username
 	if ci, ok := a.clientsByUser[username]; ok {
 		ci.lastContact = time.Now().UnixNano()
 		return ci.nonce, nil
 	}
 
-	// Create an entry for this user
-	nonce, err = createNonce()
-	if err != nil {
-		return "", err
-	}
 	ci := &cookieClientInfo{username, time.Now().UnixNano(), nonce}
 	a.clientsByNonce[nonce] = ci
 	a.clientsByUser[username] = ci
@@ -191,6 +210,9 @@ func (a *Cookie) LoginWithResponse(w http.ResponseWriter, username, password str
 
 // Logout ensures that the nonce is no longer valid.
 func (a *Cookie) Logout(nonce string) {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
 	// Do we have a client with that nonce?
 	if client, ok := a.clientsByNonce[nonce]; ok {
 		// remove client info from maps
@@ -213,6 +235,6 @@ func (a *Cookie) LogoutWithReponse(w http.ResponseWriter, r *http.Request) error
 	}
 
 	// Clear the cookie from the client
-	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: "", Expires: time.Unix(0, 0)})
+	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: "", Expires: time.Unix(0,0) })
 	return nil
 }

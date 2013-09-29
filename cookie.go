@@ -238,6 +238,6 @@ func (a *Cookie) LogoutWithReponse(w http.ResponseWriter, r *http.Request) error
 	}
 
 	// Clear the cookie from the client
-	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: "", Expires: time.Unix(0,0) })
+	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: "", Path: a.Path, Expires: time.Unix(0,0) })
 	return nil
 }

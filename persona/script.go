@@ -5,6 +5,8 @@
 package persona
 
 const (
+	// ScriptUrl points to the Persona JavaScript library needed by the clients.
 	ScriptUrl     = "https://login.persona.org/include.js"
-	Scriptelement = `<script src="https://login.persona.org/include.js"></script>`
+	// ScriptElement should be included in the body of the HTML response, preferably at the bottom of the page body.
+	ScriptElement = `<script src="https://login.persona.org/include.js"></script>`
 )

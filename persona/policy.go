@@ -5,7 +5,6 @@
 package persona
 
 import (
-	"fmt"
 	"container/heap"
 	"errors"
 	"html"
@@ -62,9 +61,10 @@ func (pq priorityQueue) MinValue() int64 {
 	return pq[n-1].lastContact
 }
 
-// A Cookie is a policy for authenticating users that uses a cookie stored
-// on the client to verify authorized clients.  This authentication scheme
-// is more involved than the others, as callers will need to implement URLs
+// A Policy is an authentication policy (in the sense of the httpauth package) for authenticating 
+// users.  The policy verifies that users credentials using Mozilla's Persona, and
+// then setting a cookie stored on the client to verify authorized clients.  This 
+// authentication scheme is more involved than the others, as callers will need to implement URLs
 // for login and logout pages.
 type Policy struct {
 	// Realm provides a 'namespace' where the authentication will be considered.
@@ -83,7 +83,7 @@ type Policy struct {
 	lru            priorityQueue
 }
 
-// NewCookie creates a new authentication policy that uses the cookie authentication scheme.
+// NewPolicy creates a new authentication policy that uses Mozilla's Persona.
 func NewPolicy(realm, url string) *Policy {
 	return &Policy{
 		realm,
@@ -186,7 +186,6 @@ func (a *Policy) Login(assertion, audience string) (nonce string, err error) {
 
 	// Check if there is already a session for this username
 	if ci, ok := a.clientsByUser[user.Email]; ok {
-		fmt.Println( "found existing user.", ci.username )
 		ci.lastContact = time.Now().UnixNano()
 		return ci.nonce, nil
 	}
@@ -219,6 +218,10 @@ func (a *Policy) LoginWithResponse(w http.ResponseWriter, assertion, audience st
 }
 
 // Logout ensures that the nonce is no longer valid.
+//
+// Note, this does not complete the logout on the client side.  The current
+// Persona could easily reauthorize the user, so a complete logout will require
+// action by the client as well, such as calling navigator.id.logout().
 func (a *Policy) Logout(nonce string) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
@@ -236,6 +239,10 @@ func (a *Policy) Logout(nonce string) {
 // LogoutWithResponse ensures that the session associated with the HTTP request
 // is no longer valid.  It sets a header on the response to erase any cookies
 // used by the client to identify the session.
+//
+// Note, this does not complete the logout on the client side.  The current
+// Persona could easily reauthorize the user, so a complete logout will require
+// action by the client as well, such as calling navigator.id.logout().
 func (a *Policy) LogoutWithReponse(w http.ResponseWriter, r *http.Request) error {
 	// Find the nonce used to identify a client
 	token, err := r.Cookie("Authorization")
@@ -245,7 +252,6 @@ func (a *Policy) LogoutWithReponse(w http.ResponseWriter, r *http.Request) error
 	}
 
 	// Clear the cookie from the client
-	fmt.Println( "Nonce:", token)
 	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: "", Path: a.Path, Expires: time.Unix(0,0) })
 	return nil
 }

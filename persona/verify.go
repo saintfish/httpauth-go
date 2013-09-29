@@ -16,10 +16,15 @@ const (
 	verifyUrl = "https://verifier.login.persona.org/verify"
 )
 
+// A User contains all of the information provided by Persona for an authenticated user.
 type User struct {
+	// Email is the username for the authenticated user.
 	Email    string
+	// The website URL for which the user was authenticated.
 	Audience string
+	// The date and time when the authorization will expire on the Persona servers. 
 	Expires  time.Time
+	// The hostname of the identity provider that issued the assertion.
 	Issuer   string
 }
 
@@ -34,6 +39,7 @@ type verifyResponse struct {
 	Reason string `json:"reason"`
 }
 
+// An error encapsulates the reason that the Persona identity provided could not verify an assertion.
 type Error struct {
 	Reason string
 }
@@ -42,6 +48,8 @@ func (e Error) Error() string {
 	return "Invalid assertion:  " + e.Reason
 }
 
+// Verify checks with the Persona server to validate an assertion.  If the assertion is valid,
+// this routine will provide details about the user. 
 func Verify(assertion, audience string) (*User, error) {
 	// Post to serice to authenticate the token
 	postBody := strings.NewReader("assertion=" + assertion + "&audience=" + audience)

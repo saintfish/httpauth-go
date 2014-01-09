@@ -207,7 +207,13 @@ func (a *Cookie) LoginWithResponse(w http.ResponseWriter, username, password str
 		return err
 	}
 
-	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: nonce, Path: a.Path})
+	// There is no reason for client-side code to access the nonce.  Therefore,
+	// we will set the cookie as HttpOnly.
+	// We should also consider setting the cookie as secure, and restrict 
+	// it to HTTPS connections.  However, some library users might be
+	// using HTTP, and the nonce should (at minimum) be safe against
+	// replay attacks.
+	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: nonce, Path: a.Path, HttpOnly:true})
 	return nil
 }
 

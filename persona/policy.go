@@ -213,7 +213,7 @@ func (a *Policy) LoginWithResponse(w http.ResponseWriter, assertion, audience st
 		return err
 	}
 
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: nonce, Path: a.Path})
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: nonce, Path: a.Path, HttpOnly:true})
 	return nil
 }
 
@@ -246,7 +246,7 @@ func (a *Policy) Logout(nonce string) {
 func (a *Policy) LogoutWithReponse(w http.ResponseWriter, r *http.Request) error {
 	// Find the nonce used to identify a client
 	token, err := r.Cookie("Authorization")
-	if err == nil || token.Value != "" {
+	if err == nil && token.Value != "" {
 		// Invalidate the nonce
 		a.Logout(token.Value)
 	}

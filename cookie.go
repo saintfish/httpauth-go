@@ -1,4 +1,4 @@
-// Copyright 2012 Robert W. Johnstone. All rights reserved.
+// Copyright 2014 Robert W. Johnstone. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -67,6 +67,8 @@ type Cookie struct {
 	LoginPage string
 	// Path sets the scope of the authorization cookie
 	Path string
+	// RequireXsrfHeader adds an additional verification.  See function VerifyXsrfHeader.
+	RequireXsrfHeader bool
 
 	// CientCacheResidence controls how long client information is retained
 	ClientCacheResidence time.Duration
@@ -78,12 +80,13 @@ type Cookie struct {
 }
 
 // NewCookie creates a new authentication policy that uses the cookie authentication scheme.
-func NewCookie(realm, url string, auth Authenticator) *Cookie {
+func NewCookie(realm, loginPageUrl string, auth Authenticator) *Cookie {
 	return &Cookie{
 		realm,
 		auth,
-		url,
+		loginPageUrl,
 		"/",
+		false,
 		DefaultClientCacheResidence,
 		sync.Mutex{},
 		make(map[string]*cookieClientInfo),
@@ -108,6 +111,11 @@ func (a *Cookie) evictLeastRecentlySeen() {
 // If the return value is blank, then the credentials are missing,
 // invalid, or a system error prevented verification.
 func (a *Cookie) Authorize(r *http.Request) (username string) {
+	// Verify XSRF header
+	if a.RequireXsrfHeader && !VerifyXsrfHeader(r) {
+		return ""
+	}
+	
 	// Find the nonce used to identify a client
 	token, err := r.Cookie("Authorization")
 	if err != nil || token.Value == "" {

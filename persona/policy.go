@@ -173,7 +173,16 @@ func (a *Policy) Login(assertion, audience string) (nonce string, err error) {
 	if err!=nil {
 		return "", ErrInvalidToken
 	}
+	
+	return a.LoginWithUser(user)
+}
 
+// LoginWithUser creates a client entry.  It is assumed that the user
+// has already been verified.  The nonce can be used by the client to identify the session.
+//
+// The caller is responsibe for setting a cookie in the response, or using
+// some other method, to communicate the nonce to the user.
+func (a *Policy) LoginWithUser(user *User) (nonce string, err error) {
 	// Create an entry for this user
 	nonce, err = createNonce()
 	if err != nil {

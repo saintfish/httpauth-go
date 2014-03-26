@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"testing"
-	"time"
 )
 
 var (
@@ -21,32 +21,33 @@ const (
 )
 
 func init() {
-	cookieAuth = NewCookie("golang", "http://localhost"+port+"/cookie/login/", func(username, password string) bool {
+	cookieAuth = NewCookie("golang", "/cookie/login/", func(username, password string) bool {
 		return username == password
 	})
-
-	http.HandleFunc("/cookie/login/", cookieLoginHandler)
-	http.HandleFunc("/cookie/", cookieHandler)
-	go http.ListenAndServe(port, nil)
-	time.Sleep(1 * time.Second)
 }
 
 func cookieHandler(w http.ResponseWriter, r *http.Request) {
-	username := cookieAuth.Authorize(r)
-	if username == "" {
-		cookieAuth.NotifyAuthRequired(w, r)
-		return
+	switch r.URL.Path {
+	case "/cookie/":
+		username := cookieAuth.Authorize(r)
+		if username == "" {
+			cookieAuth.NotifyAuthRequired(w, r)
+			return
+		}
+
+		fmt.Fprintf(w, "<html><body><h1>Hello</h1><p>Welcome, %s</p></body></html>", username)
+	case "/cookie/login/":
+		fmt.Fprintf(w, htmlLogin)
+	default:
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 	}
-
-	fmt.Fprintf(w, "<html><body><h1>Hello</h1><p>Welcome, %s</p></body></html>", username)
-}
-
-func cookieLoginHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, htmlLogin)
 }
 
 func TestCookieNoAuth(t *testing.T) {
-	resp, err := http.Get("http://localhost" + port + "/cookie/")
+	ts := httptest.NewServer(http.HandlerFunc(cookieHandler))
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/cookie/")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -55,7 +56,7 @@ func TestCookieNoAuth(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Received incorrect status: %d", resp.StatusCode)
 	}
-	if resp.Request.URL.String() != "http://localhost"+port+"/cookie/login/" {
+	if resp.Request.URL.String() != ts.URL+"/cookie/login/" {
 		t.Errorf("Received incorrect page: %s", resp.Request.URL.String())
 	}
 
@@ -96,12 +97,15 @@ func TestCookieLogout(t *testing.T) {
 }
 
 func TestCookieGoodAuth(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(cookieHandler))
+	defer ts.Close()
+
 	nonce, err := cookieAuth.Login("user1", "user1")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
 
-	req, err := http.NewRequest("GET", "http://localhost"+port+"/cookie/", nil)
+	req, err := http.NewRequest("GET", ts.URL+"/cookie/", nil)
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -116,7 +120,7 @@ func TestCookieGoodAuth(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Received incorrect status: %d", resp.StatusCode)
 	}
-	if resp.Request.URL.String() != "http://localhost"+port+"/cookie/" {
+	if resp.Request.URL.String() != ts.URL+"/cookie/" {
 		t.Errorf("Received incorrect page: %s", resp.Request.URL.String())
 	}
 
@@ -132,12 +136,15 @@ func TestCookieGoodAuth(t *testing.T) {
 }
 
 func TestCookieLogoutWeb(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(cookieHandler))
+	defer ts.Close()
+
 	nonce, err := cookieAuth.Login("user1", "user1")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
 
-	req, err := http.NewRequest("GET", "http://localhost"+port+"/cookie/", nil)
+	req, err := http.NewRequest("GET", ts.URL+"/cookie/", nil)
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -152,7 +159,7 @@ func TestCookieLogoutWeb(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Received incorrect status: %d", resp.StatusCode)
 	}
-	if resp.Request.URL.String() != "http://localhost"+port+"/cookie/" {
+	if resp.Request.URL.String() != ts.URL+"/cookie/" {
 		t.Errorf("Received incorrect page: %s", resp.Request.URL.String())
 	}
 

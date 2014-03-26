@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"testing"
-	"time"
 )
 
 var (
@@ -17,33 +17,34 @@ var (
 )
 
 func init() {
-	cookieXsrfAuth = NewCookie("golang", "http://localhost"+port+"/cookie_xsrf/login/", func(username, password string) bool {
+	cookieXsrfAuth = NewCookie("golang", "/cookie/login/", func(username, password string) bool {
 		return username == password
 	})
 	cookieXsrfAuth.RequireXsrfHeader = true
-
-	http.HandleFunc("/cookie_xsrf/login/", cookieXsrfLoginHandler)
-	http.HandleFunc("/cookie_xsrf/", cookieXsrfHandler)
-	go http.ListenAndServe(port, nil)
-	time.Sleep(1 * time.Second)
 }
 
 func cookieXsrfHandler(w http.ResponseWriter, r *http.Request) {
-	username := cookieXsrfAuth.Authorize(r)
-	if username == "" {
-		cookieXsrfAuth.NotifyAuthRequired(w, r)
-		return
+	switch r.URL.Path {
+	case "/cookie/":
+		username := cookieXsrfAuth.Authorize(r)
+		if username == "" {
+			cookieXsrfAuth.NotifyAuthRequired(w, r)
+			return
+		}
+
+		fmt.Fprintf(w, "<html><body><h1>Hello</h1><p>Welcome, %s</p></body></html>", username)
+	case "/cookie/login/":
+		fmt.Fprintf(w, htmlLogin)
+	default:
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 	}
-
-	fmt.Fprintf(w, "<html><body><h1>Hello</h1><p>Welcome, %s</p></body></html>", username)
-}
-
-func cookieXsrfLoginHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, htmlLogin)
 }
 
 func TestCookieXsrfNoAuth(t *testing.T) {
-	resp, err := http.Get("http://localhost" + port + "/cookie_xsrf/")
+	ts := httptest.NewServer(http.HandlerFunc(cookieXsrfHandler))
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/cookie/")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -52,7 +53,7 @@ func TestCookieXsrfNoAuth(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Received incorrect status: %d", resp.StatusCode)
 	}
-	if resp.Request.URL.String() != "http://localhost"+port+"/cookie_xsrf/login/" {
+	if resp.Request.URL.String() != ts.URL+"/cookie/login/" {
 		t.Errorf("Received incorrect page: %s", resp.Request.URL.String())
 	}
 
@@ -68,12 +69,15 @@ func TestCookieXsrfNoAuth(t *testing.T) {
 }
 
 func TestCookieXsrfMissingHeader(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(cookieXsrfHandler))
+	defer ts.Close()
+
 	nonce, err := cookieXsrfAuth.Login("user1", "user1")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
 
-	req, err := http.NewRequest("GET", "http://localhost"+port+"/cookie_xsrf/", nil)
+	req, err := http.NewRequest("GET", ts.URL+"/cookie/", nil)
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -88,7 +92,7 @@ func TestCookieXsrfMissingHeader(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Received incorrect status: %d", resp.StatusCode)
 	}
-	if resp.Request.URL.String() != "http://localhost"+port+"/cookie_xsrf/login/" {
+	if resp.Request.URL.String() != ts.URL+"/cookie/login/" {
 		t.Errorf("Received incorrect page: %s", resp.Request.URL.String())
 	}
 
@@ -103,17 +107,20 @@ func TestCookieXsrfMissingHeader(t *testing.T) {
 }
 
 func TestCookieXsrfGoodAuth(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(cookieXsrfHandler))
+	defer ts.Close()
+
 	nonce, err := cookieXsrfAuth.Login("user1", "user1")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
 
-	req, err := http.NewRequest("GET", "http://localhost"+port+"/cookie_xsrf/", nil)
+	req, err := http.NewRequest("GET", ts.URL+"/cookie/", nil)
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
 	req.AddCookie(&http.Cookie{Name: "Authorization", Value: nonce})
-	req.Header.Add( "X-XSRF-Cookie", "true" )
+	req.Header.Add("X-XSRF-Cookie", "true")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -124,7 +131,7 @@ func TestCookieXsrfGoodAuth(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Received incorrect status: %d", resp.StatusCode)
 	}
-	if resp.Request.URL.String() != "http://localhost"+port+"/cookie_xsrf/" {
+	if resp.Request.URL.String() != ts.URL+"/cookie/" {
 		t.Errorf("Received incorrect page: %s", resp.Request.URL.String())
 	}
 
@@ -140,17 +147,20 @@ func TestCookieXsrfGoodAuth(t *testing.T) {
 }
 
 func TestCookieXsrfLogoutWeb(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(cookieXsrfHandler))
+	defer ts.Close()
+
 	nonce, err := cookieXsrfAuth.Login("user1", "user1")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
 
-	req, err := http.NewRequest("GET", "http://localhost"+port+"/cookie_xsrf/", nil)
+	req, err := http.NewRequest("GET", ts.URL+"/cookie/", nil)
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
 	req.AddCookie(&http.Cookie{Name: "Authorization", Value: nonce})
-	req.Header.Add( "X-XSRF-Cookie", "true" )
+	req.Header.Add("X-XSRF-Cookie", "true")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -161,7 +171,7 @@ func TestCookieXsrfLogoutWeb(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Received incorrect status: %d", resp.StatusCode)
 	}
-	if resp.Request.URL.String() != "http://localhost"+port+"/cookie_xsrf/" {
+	if resp.Request.URL.String() != ts.URL+"/cookie/" {
 		t.Errorf("Received incorrect page: %s", resp.Request.URL.String())
 	}
 

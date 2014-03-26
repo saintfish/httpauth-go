@@ -73,7 +73,7 @@ type Cookie struct {
 	// CientCacheResidence controls how long client information is retained
 	ClientCacheResidence time.Duration
 
-	mutex   sync.Mutex
+	mutex          sync.Mutex
 	clientsByNonce map[string]*cookieClientInfo
 	clientsByUser  map[string]*cookieClientInfo
 	lru            cookiePriorityQueue
@@ -115,13 +115,13 @@ func (a *Cookie) Authorize(r *http.Request) (username string) {
 	if a.RequireXsrfHeader && !VerifyXsrfHeader(r) {
 		return ""
 	}
-	
+
 	// Find the nonce used to identify a client
 	token, err := r.Cookie("Authorization")
 	if err != nil || token.Value == "" {
 		return ""
 	}
-	if len(token.Value)!=nonceLen {
+	if len(token.Value) != nonceLen {
 		return ""
 	}
 
@@ -158,7 +158,7 @@ func (a *Cookie) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
 
 	// Lock before mutating the fields of the policy
 	a.mutex.Lock()
-	defer a.mutex.Unlock()	
+	defer a.mutex.Unlock()
 
 	// Check for old clientInfo, and evict those older than
 	// residence time.
@@ -217,11 +217,11 @@ func (a *Cookie) LoginWithResponse(w http.ResponseWriter, username, password str
 
 	// There is no reason for client-side code to access the nonce.  Therefore,
 	// we will set the cookie as HttpOnly.
-	// We should also consider setting the cookie as secure, and restrict 
+	// We should also consider setting the cookie as secure, and restrict
 	// it to HTTPS connections.  However, some library users might be
 	// using HTTP, and the nonce should (at minimum) be safe against
 	// replay attacks.
-	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: nonce, Path: a.Path, HttpOnly:true})
+	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: nonce, Path: a.Path, HttpOnly: true})
 	return nil
 }
 
@@ -252,6 +252,6 @@ func (a *Cookie) LogoutWithReponse(w http.ResponseWriter, r *http.Request) error
 	}
 
 	// Clear the cookie from the client
-	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: "", Path: a.Path, Expires: time.Unix(0,0) })
+	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: "", Path: a.Path, Expires: time.Unix(0, 0)})
 	return nil
 }

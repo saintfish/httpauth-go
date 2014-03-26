@@ -11,6 +11,8 @@ import (
 )
 
 func ExampleNewBasic() {
+	const port = ":8080"
+
 	// Create an authorization policy that uses the basic authorization
 	// scheme.  The credientials will be considered valid if the password
 	// is simply the username repeated twice.

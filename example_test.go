@@ -69,26 +69,24 @@ func ExampleNewCookie() {
 	})
 	http.HandleFunc("/login/", func(w http.ResponseWriter, r *http.Request) {
 		// Get the username and password from the request.  This will
-		// depend on the callee, but could be as simple as calling 
+		// depend on the callee, but could be as simple as calling
 		// ParseFrom on the request.
 		username := /* implementation specific */ "user1"
 		password := /* implementation specific */ "password1"
-		
+
 		err := auth.Login(w, username, password)
-		if err==ErrBadUsernameOrPassword {
-			http.Error(w, "Someone is misbehaving.", http.StatusUnauthorized )
+		if err == ErrBadUsernameOrPassword {
+			http.Error(w, "Someone is misbehaving.", http.StatusUnauthorized)
 			return
 		}
-		if err!=nil {
-			http.Error(w, "Internal server error.", http.StatusInternalServerError )
+		if err != nil {
+			http.Error(w, "Internal server error.", http.StatusInternalServerError)
 			return
 		}
-		http.Redirect(w,r, "/example", http.StatusTemporaryRedirect)
-	})	
+		http.Redirect(w, r, "/example", http.StatusTemporaryRedirect)
+	})
 
 	// This is just an example.  Run the HTTP server for a second and then quit.
 	go http.ListenAndServe(port, nil)
 	time.Sleep(1 * time.Second)
 }
-
-

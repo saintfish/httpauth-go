@@ -36,21 +36,20 @@ func cookieHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		fmt.Fprintf(w, "<html><body><h1>Hello</h1><p>Welcome, %s</p></body></html>", username)
-		
+
 	case "/cookie/login/":
 		fmt.Fprintf(w, htmlLogin)
-		
+
 	default:
-		http.Error( w, "Not found.", http.StatusNotFound )
+		http.Error(w, "Not found.", http.StatusNotFound)
 	}
 }
 
-
 func TestCookieNoAuth(t *testing.T) {
-	ts := httptest.NewServer( http.HandlerFunc(cookieHandler))
+	ts := httptest.NewServer(http.HandlerFunc(cookieHandler))
 	defer ts.Close()
-	
-	resp, err := http.Get(ts.URL + "/cookie/" )
+
+	resp, err := http.Get(ts.URL + "/cookie/")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -59,7 +58,7 @@ func TestCookieNoAuth(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Received incorrect status: %d", resp.StatusCode)
 	}
-	if resp.Request.URL.String() != ts.URL +"/cookie/login/" {
+	if resp.Request.URL.String() != ts.URL+"/cookie/login/" {
 		t.Errorf("Received incorrect page: %s", resp.Request.URL.String())
 	}
 
@@ -100,9 +99,9 @@ func TestCookieDestroySession(t *testing.T) {
 }
 
 func TestCookieGoodAuth(t *testing.T) {
-	ts := httptest.NewServer( http.HandlerFunc(cookieHandler))
+	ts := httptest.NewServer(http.HandlerFunc(cookieHandler))
 	defer ts.Close()
-	
+
 	nonce, err := cookieAuth.createSession("user1", "user1")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
@@ -139,9 +138,9 @@ func TestCookieGoodAuth(t *testing.T) {
 }
 
 func TestCookieLogout(t *testing.T) {
-	ts := httptest.NewServer( http.HandlerFunc(cookieHandler))
+	ts := httptest.NewServer(http.HandlerFunc(cookieHandler))
 	defer ts.Close()
-	
+
 	nonce, err := cookieAuth.createSession("user1", "user1")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)

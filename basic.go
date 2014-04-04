@@ -92,7 +92,7 @@ func (a *Basic) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
 // "Authorization" from an HTTP request, and retrieve the credentials.
 //
 // If the token is malformed, empty strings are returned for the
-// username and password. 
+// username and password.
 func (a *Basic) ParseToken(token string) (username, password string) {
 	if token == "" {
 		return "", ""

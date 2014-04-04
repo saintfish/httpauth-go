@@ -91,7 +91,7 @@ func TestDigestBrowser(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test of digest authorization.")
 	}
-	
+
 	url := "http://user:user@localhost" + port + "/digest/"
 	fmt.Println("Use a webbrowser, and navigate to", url, "to check digest authentication.")
 	fmt.Println("For authentication to succeed, the username and password must match.")
@@ -102,7 +102,7 @@ func TestDigestBrowser2(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test of digest authorization.")
 	}
-	
+
 	url := "http://user:user@localhost" + port + "/digest/"
 	fmt.Println("Use a webbrowser, and navigate to", url, "to check digest authentication.")
 	fmt.Println("For authentication to succeed, the username and password must match.")

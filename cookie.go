@@ -75,7 +75,7 @@ type Cookie struct {
 	// CientCacheResidence controls how long client information is retained
 	ClientCacheResidence time.Duration
 
-	mutex   sync.Mutex
+	mutex          sync.Mutex
 	clientsByNonce map[string]*cookieClientInfo
 	clientsByUser  map[string]*cookieClientInfo
 	lru            cookiePriorityQueue
@@ -117,7 +117,7 @@ func (a *Cookie) Authorize(r *http.Request) (username string) {
 	if err != nil || token.Value == "" {
 		return ""
 	}
-	if len(token.Value)!=nonceLen {
+	if len(token.Value) != nonceLen {
 		return ""
 	}
 
@@ -154,7 +154,7 @@ func (a *Cookie) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
 
 	// Lock before mutating the fields of the policy
 	a.mutex.Lock()
-	defer a.mutex.Unlock()	
+	defer a.mutex.Unlock()
 
 	// Check for old clientInfo, and evict those older than
 	// residence time.
@@ -162,7 +162,7 @@ func (a *Cookie) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
 }
 
 // The function createSession checks the credentials of a client, and, if
-// valid, creates a client entry.  The nonce can be used by the client to 
+// valid, creates a client entry.  The nonce can be used by the client to
 // identify the session.
 //
 // This functions handles internal details of creating the session only.
@@ -199,13 +199,13 @@ func (a *Cookie) createSession(username, password string) (nonce string, err err
 	return nonce, nil
 }
 
-// Login checks the credentials (a username/password pair) of the client.  
-// If successful, a session is created, and then a cookie is set on the 
+// Login checks the credentials (a username/password pair) of the client.
+// If successful, a session is created, and then a cookie is set on the
 // HTTP response so that the client can access the session in future
 // HTTP requests.
 //
 // The caller is responsable for creating an appropriate response body for
-// the HTTP request. For successful validation, redirection (http.StatusTemporaryRedirect) 
+// the HTTP request. For successful validation, redirection (http.StatusTemporaryRedirect)
 // to the protected content is most likely the correct response.
 //
 // If the credentials cannot be verified, an error (ErrBadUsernameOrPassword)
@@ -217,7 +217,7 @@ func (a *Cookie) Login(w http.ResponseWriter, username, password string) error {
 		return err
 	}
 
-	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: nonce, Path: a.Path, HttpOnly:true})
+	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: nonce, Path: a.Path, HttpOnly: true})
 	return nil
 }
 
@@ -237,7 +237,7 @@ func (a *Cookie) destroySession(nonce string) {
 }
 
 // Logout ensures that the session associated with the HTTP request
-// is no longer valid.  It then sets a header on the response to erase any 
+// is no longer valid.  It then sets a header on the response to erase any
 // cookies used by the client to identify the session.  However, even if
 // future HTTP requests contains the cookie, the call to Authorize will
 // fail.
@@ -258,6 +258,6 @@ func (a *Cookie) Logout(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// Clear the cookie from the client
-	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: "", Path: a.Path, Expires: time.Unix(0,0) })
+	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: "", Path: a.Path, Expires: time.Unix(0, 0)})
 	return nil
 }

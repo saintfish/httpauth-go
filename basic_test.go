@@ -13,15 +13,11 @@ import (
 )
 
 var (
-	// Policy used for all testing.
+	// The following policy is used for all of the tests in this file
 	basicAuth *Basic
 	// Ensure that the Basic authentication policy meets the requirements
 	// for the Policy interface.
 	_ Policy = &Basic{}
-)
-
-const (
-	port string = ":8088"
 )
 
 func init() {

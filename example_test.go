@@ -11,6 +11,8 @@ import (
 )
 
 func ExampleNewBasic() {
+	const port = ":8080"
+
 	// Create an authorization policy that uses the basic authorization
 	// scheme.  The credientials will be considered valid if the password
 	// is simply the username repeated twice.
@@ -49,6 +51,8 @@ func ExamplePasswordLookup_Authenticator() {
 }
 
 func ExampleNewCookie() {
+	const port = ":8080"
+
 	// Create an authorization policy that uses the cookie authorization
 	// scheme.  The credientials will be considered valid if the password
 	// is simply the username repeated twice.

@@ -8,26 +8,19 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"testing"
-	"time"
 )
 
-func init() {
-	basicAuth := NewBasic("golang", func(username, password string) bool {
-		return username == password
-	}, nil)
-
-	http.Handle("/wrapbasic/", NewHandlerWithAuth(basicAuth, http.HandlerFunc(myHandler)))
-	go http.ListenAndServe(port, nil)
-	time.Sleep(1 * time.Second)
-}
-
-func myHandler(w http.ResponseWriter, r *http.Request) {
+func wrappedHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<html><body><h1>Hello</h1><p>Welcome, authenticated user!</p></body></html>")
 }
 
 func TestWrapBasicNoAuth(t *testing.T) {
-	resp, err := http.Get("http://localhost" + port + "/wrapbasic/")
+	ts := httptest.NewServer(NewHandlerWithAuth(basicAuth, http.HandlerFunc(wrappedHandler)))
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL)
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -50,7 +43,10 @@ func TestWrapBasicNoAuth(t *testing.T) {
 }
 
 func TestWrapBasicBadAuth(t *testing.T) {
-	resp, err := http.Get("http://user:pass@localhost" + port + "/wrapbasic/")
+	ts := httptest.NewServer(NewHandlerWithAuth(basicAuth, http.HandlerFunc(wrappedHandler)))
+	defer ts.Close()
+
+	resp, err := http.Get("http://user:pass@" + ts.URL[7:])
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -73,7 +69,10 @@ func TestWrapBasicBadAuth(t *testing.T) {
 }
 
 func TestWrapBasicGoodAuth(t *testing.T) {
-	resp, err := http.Get("http://user:user@localhost" + port + "/wrapbasic/")
+	ts := httptest.NewServer(NewHandlerWithAuth(basicAuth, http.HandlerFunc(wrappedHandler)))
+	defer ts.Close()
+
+	resp, err := http.Get("http://user:user@" + ts.URL[7:])
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -96,7 +95,10 @@ func TestWrapBasicGoodAuth(t *testing.T) {
 }
 
 func TestWrapBasicCredientials(t *testing.T) {
-	resp, err := http.Get("http://user:pass@localhost" + port + "/wrapbasic/")
+	ts := httptest.NewServer(NewHandlerWithAuth(basicAuth, http.HandlerFunc(wrappedHandler)))
+	defer ts.Close()
+
+	resp, err := http.Get("http://user:pass@" + ts.URL[7:])
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}

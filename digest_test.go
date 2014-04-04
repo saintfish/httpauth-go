@@ -8,10 +8,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
 var (
+	// Verify that the policy provided by Basic meets the requirements
+	// of the interface Policy
+	_ Policy = &Digest{}
+
+	// The following policy is used for all of the tests in this file
 	digestAuth *Digest
 	success    chan bool
 )
@@ -26,8 +32,6 @@ func init() {
 	}
 
 	success = make(chan bool)
-
-	http.HandleFunc("/digest/", digestHandler)
 }
 
 func digestHandler(w http.ResponseWriter, r *http.Request) {
@@ -37,12 +41,22 @@ func digestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ignore spurious requests
+	if r.URL.String()[0:7] != "/digest" {
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	}
+
+	fmt.Println("digest", r.URL)
 	fmt.Fprintf(w, "<html><body><h1>Hello</h1><p>Welcome, %s</p></body></html>", username)
 	success <- true
 }
 
 func TestDigestNoAuth(t *testing.T) {
-	resp, err := http.Get("http://localhost" + port + "/digest/")
+	ts := httptest.NewServer(http.HandlerFunc(digestHandler))
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL)
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -65,7 +79,10 @@ func TestDigestNoAuth(t *testing.T) {
 }
 
 func TestDigestBadAuth(t *testing.T) {
-	resp, err := http.Get("http://user:pass@localhost" + port + "/digest/")
+	ts := httptest.NewServer(http.HandlerFunc(digestHandler))
+	defer ts.Close()
+
+	resp, err := http.Get("http://user:pass@" + ts.URL[7:])
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -92,7 +109,10 @@ func TestDigestBrowser(t *testing.T) {
 		t.Skip("skipping test of digest authorization.")
 	}
 
-	url := "http://user:user@localhost" + port + "/digest/"
+	ts := httptest.NewServer(http.HandlerFunc(digestHandler))
+	defer ts.Close()
+
+	url := "http://user:user@" + ts.URL[7:] + "/digest/"
 	fmt.Println("Use a webbrowser, and navigate to", url, "to check digest authentication.")
 	fmt.Println("For authentication to succeed, the username and password must match.")
 	<-success
@@ -103,7 +123,10 @@ func TestDigestBrowser2(t *testing.T) {
 		t.Skip("skipping test of digest authorization.")
 	}
 
-	url := "http://user:user@localhost" + port + "/digest/"
+	ts := httptest.NewServer(http.HandlerFunc(digestHandler))
+	defer ts.Close()
+
+	url := "http://user:user@" + ts.URL[7:] + "/digest/"
 	fmt.Println("Use a webbrowser, and navigate to", url, "to check digest authentication.")
 	fmt.Println("For authentication to succeed, the username and password must match.")
 	<-success

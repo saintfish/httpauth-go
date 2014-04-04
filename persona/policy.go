@@ -256,7 +256,7 @@ func (a *Policy) destroySession(nonce string) {
 func (a *Policy) Logout(w http.ResponseWriter, r *http.Request) error {
 	// Find the nonce used to identify a client
 	token, err := r.Cookie("Authorization")
-	if err == nil || token.Value != "" {
+	if err == nil && token.Value != "" {
 		// Invalidate the nonce
 		a.destroySession(token.Value)
 	}

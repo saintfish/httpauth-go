@@ -13,40 +13,35 @@ import (
 )
 
 var (
-	cookieAuth *Cookie
-)
-
-const (
-	htmlLogin string = `<html><head><title>Login</title></head><body><p>There should be a login form here</p></body></html>`
+	cookieXsrfAuth *Cookie
 )
 
 func init() {
-	cookieAuth = NewCookie("golang", "/cookie/login/", func(username, password string) bool {
+	cookieXsrfAuth = NewCookie("golang", "/cookie/login/", func(username, password string) bool {
 		return username == password
 	})
+	cookieXsrfAuth.RequireXsrfHeader = true
 }
 
-func cookieHandler(w http.ResponseWriter, r *http.Request) {
+func cookieXsrfHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/cookie/":
-		username := cookieAuth.Authorize(r)
+		username := cookieXsrfAuth.Authorize(r)
 		if username == "" {
-			cookieAuth.NotifyAuthRequired(w, r)
+			cookieXsrfAuth.NotifyAuthRequired(w, r)
 			return
 		}
 
 		fmt.Fprintf(w, "<html><body><h1>Hello</h1><p>Welcome, %s</p></body></html>", username)
-
 	case "/cookie/login/":
 		fmt.Fprintf(w, htmlLogin)
-
 	default:
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 	}
 }
 
-func TestCookieNoAuth(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(cookieHandler))
+func TestCookieXsrfNoAuth(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(cookieXsrfHandler))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/cookie/")
@@ -73,36 +68,11 @@ func TestCookieNoAuth(t *testing.T) {
 
 }
 
-func TestCookieCreateSession(t *testing.T) {
-	nonce1, err := cookieAuth.createSession("user1", "user1")
-	if err != nil {
-		t.Fatalf("Error:  %s", err)
-	}
-
-	nonce2, err := cookieAuth.createSession("user1", "user1")
-	if err != nil {
-		t.Fatalf("Error:  %s", err)
-	}
-
-	if nonce1 != nonce2 {
-		t.Errorf("Error when login twice using the same username.")
-	}
-}
-
-func TestCookieDestroySession(t *testing.T) {
-	nonce, err := cookieAuth.createSession("user1", "user1")
-	if err != nil {
-		t.Fatalf("Error:  %s", err)
-	}
-
-	cookieAuth.destroySession(nonce)
-}
-
-func TestCookieGoodAuth(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(cookieHandler))
+func TestCookieXsrfMissingHeader(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(cookieXsrfHandler))
 	defer ts.Close()
 
-	nonce, err := cookieAuth.createSession("user1", "user1")
+	nonce, err := cookieXsrfAuth.createSession("user1", "user1")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -112,6 +82,45 @@ func TestCookieGoodAuth(t *testing.T) {
 		t.Fatalf("Error:  %s", err)
 	}
 	req.AddCookie(&http.Cookie{Name: "Authorization", Value: nonce})
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Error:  %s", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Received incorrect status: %d", resp.StatusCode)
+	}
+	if resp.Request.URL.String() != ts.URL+"/cookie/login/" {
+		t.Errorf("Received incorrect page: %s", resp.Request.URL.String())
+	}
+
+	buffer, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Error:  %s", err)
+	}
+
+	if string(buffer) != htmlLogin {
+		t.Errorf("Incorrect body text.")
+	}
+}
+
+func TestCookieXsrfGoodAuth(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(cookieXsrfHandler))
+	defer ts.Close()
+
+	nonce, err := cookieXsrfAuth.createSession("user1", "user1")
+	if err != nil {
+		t.Fatalf("Error:  %s", err)
+	}
+
+	req, err := http.NewRequest("GET", ts.URL+"/cookie/", nil)
+	if err != nil {
+		t.Fatalf("Error:  %s", err)
+	}
+	req.AddCookie(&http.Cookie{Name: "Authorization", Value: nonce})
+	req.Header.Add("X-XSRF-Cookie", "true")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -137,11 +146,11 @@ func TestCookieGoodAuth(t *testing.T) {
 
 }
 
-func TestCookieLogout(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(cookieHandler))
+func TestCookieXsrfLogoutWeb(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(cookieXsrfHandler))
 	defer ts.Close()
 
-	nonce, err := cookieAuth.createSession("user1", "user1")
+	nonce, err := cookieXsrfAuth.createSession("user1", "user1")
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -151,6 +160,7 @@ func TestCookieLogout(t *testing.T) {
 		t.Fatalf("Error:  %s", err)
 	}
 	req.AddCookie(&http.Cookie{Name: "Authorization", Value: nonce})
+	req.Header.Add("X-XSRF-Cookie", "true")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

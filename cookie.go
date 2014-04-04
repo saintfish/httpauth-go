@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+// The following variables are used to specify error conditions for this
+// package.
 var (
 	ErrBadUsernameOrPassword = errors.New("Bad username or password.")
 	ErrInvalidToken          = errors.New("The session token was invalid.")

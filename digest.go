@@ -17,8 +17,10 @@ import (
 	"time"
 )
 
+// The constant DefaultClientCacheResidence contains the default value used
+// for the ClientCacheResidence field when creating new Digest instances or
+// new Cookie instances.
 const (
-	// The default value for ClientCacheResidence used when creating new Digest instances.
 	DefaultClientCacheResidence = 1 * time.Hour
 )
 

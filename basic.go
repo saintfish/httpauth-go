@@ -11,8 +11,10 @@ import (
 	"strings"
 )
 
+// The constant StatusUnauthorizedHtml contains the response body written
+// by default when a request cannot be authorized.  This can be overridden
+// by updating the field WriterUnauthorized in the authentication policy.
 const (
-	// The HTML written by default when a request cannot be authorized.
 	StatusUnauthorizedHtml string = "<html><body><h1>Unauthorized</h1></body></html>"
 )
 

@@ -14,7 +14,14 @@
 // and password pair).  Alternatively, callers can provide a function that will
 // retrieve the password for a given username.
 //
-// To support the diget authentication scheme, callers will need to provide a
+// To support the digest authentication scheme, callers will need to provide a
 // function or cluse that can retrieve the password for a given username.  The
 // alternate approach (validating a set of credentials) is not supported.
+//
+// Additionally, this package supports the cookie authentication scheme.
+// The caller must provide a URL with a login form or some other method
+// to obtain the user's credentials.  After these credentials have been
+// verified, a cookie is set on the clients computer containing a token.
+// The presence (and validity) of this token serves to authorize future
+// HTTP requests.
 package httpauth

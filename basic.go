@@ -90,6 +90,9 @@ func (a *Basic) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
 // ParseToken is a helper function that extracts the username and password
 // from an authorization token.  Callers should be able to pass in the header
 // "Authorization" from an HTTP request, and retrieve the credentials.
+//
+// If the token is malformed, empty strings are returned for the
+// username and password. 
 func (a *Basic) ParseToken(token string) (username, password string) {
 	if token == "" {
 		return "", ""

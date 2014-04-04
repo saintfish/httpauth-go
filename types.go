@@ -32,7 +32,7 @@ func (p PasswordLookup) Authenticator() Authenticator {
 // for a response.  A http.ResponseWriter is not used, as normal
 // for other HTTP responses, because the headers are already
 // provided by the authentication policy.
-type HtmlWriter func(w io.Writer, ret *http.Request)
+type HtmlWriter func(w io.Writer, request *http.Request)
 
 // A Policy is a type that implements a HTTP authentication scheme.  Two
 // standard schemes are the basic authentication scheme and the digest
@@ -45,12 +45,13 @@ type Policy interface {
 	//
 	// This function can be used to build a handler.  Most users should
 	// probably simply wrap their handler using NewAuthHandler.
-	Authorize(r *http.Request) (username string)
+	Authorize(request *http.Request) (username string)
+
 	// NotifyAuthRequired adds the headers to the HTTP response to
 	// inform the client of the failed authorization, and which scheme
 	// must be used to gain authentication.
 	//
 	// This function can be used to build a handler.  Most users should
 	// probably simply wrap their handler using NewAuthHandler.
-	NotifyAuthRequired(w http.ResponseWriter, r *http.Request)
+	NotifyAuthRequired(w http.ResponseWriter, request *http.Request)
 }

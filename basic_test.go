@@ -8,12 +8,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"testing"
-	"time"
 )
 
 var (
+	// Policy used for all testing.
 	basicAuth *Basic
+	// Ensure that the Basic authentication policy meets the requirements
+	// for the Policy interface.
+	_ Policy = &Basic{}
 )
 
 const (
@@ -24,10 +28,6 @@ func init() {
 	basicAuth = NewBasic("golang", func(username, password string) bool {
 		return username == password
 	}, nil)
-
-	http.HandleFunc("/basic/", basicHandler)
-	go http.ListenAndServe(port, nil)
-	time.Sleep(1 * time.Second)
 }
 
 func basicHandler(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +41,10 @@ func basicHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestBasicNoAuth(t *testing.T) {
-	resp, err := http.Get("http://localhost" + port + "/basic/")
+	ts := httptest.NewServer( http.HandlerFunc(basicHandler ))
+	defer ts.Close()
+	
+	resp, err := http.Get(ts.URL)
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -64,7 +67,10 @@ func TestBasicNoAuth(t *testing.T) {
 }
 
 func TestBasicBadAuth(t *testing.T) {
-	resp, err := http.Get("http://user:pass@localhost" + port + "/basic/")
+	ts := httptest.NewServer( http.HandlerFunc(basicHandler ))
+	defer ts.Close()
+	
+	resp, err := http.Get("http://user:pass@" + ts.URL[7:] )
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -87,7 +93,10 @@ func TestBasicBadAuth(t *testing.T) {
 }
 
 func TestBasicGoodAuth(t *testing.T) {
-	resp, err := http.Get("http://user:user@localhost" + port + "/basic/")
+	ts := httptest.NewServer( http.HandlerFunc(basicHandler ))
+	defer ts.Close()
+	
+	resp, err := http.Get("http://user:user@" + ts.URL[7:] )
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -110,7 +119,10 @@ func TestBasicGoodAuth(t *testing.T) {
 }
 
 func TestBasicCredientials(t *testing.T) {
-	resp, err := http.Get("http://user:pass@localhost" + port + "/basic/")
+	ts := httptest.NewServer( http.HandlerFunc(basicHandler )) 
+	defer ts.Close()
+	
+	resp, err := http.Get("http://user:pass@" + ts.URL[7:] )
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}

@@ -14,7 +14,6 @@ const (
 	nonceLen = 16
 )
 
-
 func createNonce() (string, error) {
 	var buffer [12]byte
 
@@ -27,4 +26,3 @@ func createNonce() (string, error) {
 	}
 	return base64.StdEncoding.EncodeToString(buffer[0:]), nil
 }
-

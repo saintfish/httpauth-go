@@ -13,16 +13,15 @@ import (
 )
 
 var (
-	personaAuth *Policy
-	assertion string
-	assertion_ok bool
-	assertion_chan = make( chan string )
+	personaAuth    *Policy
+	assertion      string
+	assertion_ok   bool
+	assertion_chan = make(chan string)
 )
 
 const (
-	port string = ":8181"
-	htmlLogin string =
-`<html>
+	port      string = ":8181"
+	htmlLogin string = `<html>
         <head>
 			<title>A page</title>
 			<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
@@ -92,7 +91,7 @@ func personaHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, `<html><body><h1>Header</h1><p>Some text</p></body></html>` )
+	fmt.Fprintf(w, `<html><body><h1>Header</h1><p>Some text</p></body></html>`)
 }
 
 func personaLoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -100,18 +99,23 @@ func personaLoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func personaLogin2Handler(w http.ResponseWriter, r *http.Request) {
-		err := r.ParseForm()
-		if err!=nil {
-			http.Error( w, http.StatusText(http.StatusBadRequest) + "\n" + err.Error(), http.StatusBadRequest )
-			return
-		}
-		err = personaAuth.LoginWithResponse( w, r.Form["assertion"][0], r.Host )
-		if err!=nil {
-			http.Error( w, http.StatusText(http.StatusUnauthorized) + "\n" + err.Error(), http.StatusUnauthorized )
-			return
-		}
-		assertion_chan <- r.Form["assertion"][0]
-		http.Error( w, http.StatusText(http.StatusOK), http.StatusOK )
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest)+"\n"+err.Error(), http.StatusBadRequest)
+		return
+	}
+	user, err := Verify(r.Form["assertion"][0], r.Host)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+	err = personaAuth.Login(w, user)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError)+"\n"+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	assertion_chan <- r.Form["assertion"][0]
+	http.Error(w, http.StatusText(http.StatusOK), http.StatusOK)
 }
 
 func TestPolicyNoAuth(t *testing.T) {
@@ -140,18 +144,31 @@ func TestPolicyNoAuth(t *testing.T) {
 }
 
 func TestPauseForCredentials(t *testing.T) {
-	fmt.Println( "Waiting for assertion.  Please use web browser." )
+	fmt.Println("Waiting for assertion.  Please use web browser.")
+	fmt.Println("http://localhost" + port + "/persona/login/")
 	assertion = <-assertion_chan
-	fmt.Println( "Assertion received." )
+	fmt.Println("Assertion received.")
 }
 
 func TestPersonaLogin(t *testing.T) {
-	nonce1, err := personaAuth.Login(assertion, "localhost"+port)
+	user, err := Verify(assertion, "localhost"+port)
+	if err != nil {
+		t.Fatalf("Error:  %s", err)
+	}
+	if user == nil {
+		t.Fatalf("Call to Verify return nil user.")
+	}
+
+	nonce1, err := personaAuth.createSession(user)
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
 
-	nonce2, err := personaAuth.Login(assertion, "localhost"+port)
+	if _, ok := personaAuth.clientsByNonce[nonce1]; !ok {
+		t.Fatalf("Could not find nonce in the map of sessions.")
+	}
+
+	nonce2, err := personaAuth.createSession(user)
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
@@ -161,13 +178,22 @@ func TestPersonaLogin(t *testing.T) {
 	}
 }
 
-
 func TestPersonaLogout(t *testing.T) {
-	nonce, err := personaAuth.Login(assertion, "localhost"+port)
+	user, err := Verify(assertion, "localhost"+port)
+	if err != nil {
+		t.Fatalf("Error:  %s", err)
+	}
+	if user == nil {
+		t.Fatalf("Call to Verify return nil user.")
+	}
+
+	nonce, err := personaAuth.createSession(user)
 	if err != nil {
 		t.Fatalf("Error:  %s", err)
 	}
 
-	personaAuth.Logout(nonce)
+	personaAuth.destroySession(nonce)
+	if _, ok := personaAuth.clientsByNonce[nonce]; ok {
+		t.Fatalf("destroySession failed to remove client for the nonce.")
+	}
 }
-

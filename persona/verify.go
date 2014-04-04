@@ -19,13 +19,13 @@ const (
 // A User contains all of the information provided by Persona for an authenticated user.
 type User struct {
 	// Email is the username for the authenticated user.
-	Email    string
+	Email string
 	// The website URL for which the user was authenticated.
 	Audience string
-	// The date and time when the authorization will expire on the Persona servers. 
-	Expires  time.Time
+	// The date and time when the authorization will expire on the Persona servers.
+	Expires time.Time
 	// The hostname of the identity provider that issued the assertion.
-	Issuer   string
+	Issuer string
 }
 
 type verifyResponse struct {
@@ -33,7 +33,7 @@ type verifyResponse struct {
 
 	Email    string `json:"email"`
 	Audience string `json:"audience"`
-	Expires  int64 `json:"expires"`
+	Expires  int64  `json:"expires"`
 	Issuer   string `json:"issuer"`
 
 	Reason string `json:"reason"`
@@ -49,7 +49,7 @@ func (e Error) Error() string {
 }
 
 // Verify checks with the Persona server to validate an assertion.  If the assertion is valid,
-// this routine will provide details about the user. 
+// this routine will provide details about the user.
 func Verify(assertion, audience string) (*User, error) {
 	// Post to serice to authenticate the token
 	postBody := strings.NewReader("assertion=" + assertion + "&audience=" + audience)

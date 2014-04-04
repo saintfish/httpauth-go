@@ -61,9 +61,9 @@ func (pq priorityQueue) MinValue() int64 {
 	return pq[n-1].lastContact
 }
 
-// A Policy is an authentication policy (in the sense of the httpauth package) for authenticating 
+// A Policy is an authentication policy (in the sense of the httpauth package) for authenticating
 // users.  The policy verifies that users credentials using Mozilla's Persona, and
-// then setting a cookie stored on the client to verify authorized clients.  This 
+// then setting a cookie stored on the client to verify authorized clients.  This
 // authentication scheme is more involved than the others, as callers will need to implement URLs
 // for login and logout pages.
 type Policy struct {
@@ -77,7 +77,7 @@ type Policy struct {
 	// CientCacheResidence controls how long client information is retained
 	ClientCacheResidence time.Duration
 
-	mutex   sync.Mutex
+	mutex          sync.Mutex
 	clientsByNonce map[string]*clientInfo
 	clientsByUser  map[string]*clientInfo
 	lru            priorityQueue
@@ -118,7 +118,7 @@ func (a *Policy) Authorize(r *http.Request) (username string) {
 	if err != nil || token.Value == "" {
 		return ""
 	}
-	if len(token.Value)!=nonceLen {
+	if len(token.Value) != nonceLen {
 		return ""
 	}
 
@@ -155,25 +155,23 @@ func (a *Policy) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
 
 	// Lock before mutating the fields of the policy
 	a.mutex.Lock()
-	defer a.mutex.Unlock()	
+	defer a.mutex.Unlock()
 
 	// Check for old clientInfo, and evict those older than
 	// residence time.
 	a.evictLeastRecentlySeen()
 }
 
-// Login checks the credentials of a client, and, if valid, creates a client
-// entry.  The nonce can be used by the client to identify the session.
-// Most callers will most likely be interested in LoginWithResponse.
+// The function createSession creates a client entry.  The nonce can be
+// used by the client to identify the session.
 //
-// If the credentials cannot be verified, an error will be returned (ErrBadUsernameOrPassword).
-func (a *Policy) Login(assertion, audience string) (nonce string, err error) {
-	// Authorize the user
-	user, err := Verify(assertion, audience)
-	if err!=nil {
-		return "", ErrInvalidToken
-	}
-
+// This functions handles internal details of creating the session only.
+// The caller is still responsible for creating the HTTP response, which
+// will need to save the returned nonce.
+//
+// The credentials are assumed to be verified.  They are not validated
+// before creating the session.
+func (a *Policy) createSession(user *User) (nonce string, err error) {
 	// Create an entry for this user
 	nonce, err = createNonce()
 	if err != nil {
@@ -197,32 +195,36 @@ func (a *Policy) Login(assertion, audience string) (nonce string, err error) {
 	return nonce, nil
 }
 
-// LoginWithResponse checks the credentials of the client.  If successful, a
-// cookie is on the response so that the client can access the session again.
+// Login creates a session for the user, and then a cookie is set on the
+// HTTP response so that the client can access the session in future
+// HTTP requests.
 //
-// The caller is responsable for create an appropriate response to the HTTP request.
-// For successful validation, redirection (http.StatusTemporaryRedirect) to the
-// protected content is most likely the correct response.
+// The argument should be obtained by a call to Verify, which will verify
+// the user's credentials.
+//
+// The caller is responsable for create an appropriate response body for
+// the HTTP request. For successful validation, redirection (http.StatusTemporaryRedirect)
+// to the protected content is most likely the correct response.
 //
 // If the credentials cannot be verified, an error (ErrBadUsernameOrPassword) is
 // returned.  The caller is then responsable for creating an appropriate reponse to
 // the HTTP request.
-func (a *Policy) LoginWithResponse(w http.ResponseWriter, assertion, audience string) error {
-	nonce, err := a.Login(assertion, audience)
+func (a *Policy) Login(w http.ResponseWriter, user *User) error {
+	nonce, err := a.createSession(user)
 	if err != nil {
 		return err
 	}
 
-	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: nonce, Path: a.Path})
+	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: nonce, Path: a.Path, HttpOnly: true})
 	return nil
 }
 
-// Logout ensures that the nonce is no longer valid.
+// The function destroySession ensures that the nonce is no longer valid.
 //
 // Note, this does not complete the logout on the client side.  The current
 // Persona could easily reauthorize the user, so a complete logout will require
 // action by the client as well, such as calling navigator.id.logout().
-func (a *Policy) Logout(nonce string) {
+func (a *Policy) destroySession(nonce string) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
@@ -236,22 +238,30 @@ func (a *Policy) Logout(nonce string) {
 	}
 }
 
-// LogoutWithResponse ensures that the session associated with the HTTP request
-// is no longer valid.  It sets a header on the response to erase any cookies
+// Logout ensures that the session associated with the HTTP request
+// is no longer valid.  It then sets a header on the response to erase any cookies
 // used by the client to identify the session.
+//
+// The caller is responsable for create an appropriate response to the HTTP request.
+// For successful validation, redirection (http.StatusTemporaryRedirect) to the
+// a login page or public content is most likely the correct response.
+//
+// If the credentials cannot be verified, an error is
+// returned.  The caller is then responsable for creating an appropriate reponse to
+// the HTTP request.
 //
 // Note, this does not complete the logout on the client side.  The current
 // Persona could easily reauthorize the user, so a complete logout will require
 // action by the client as well, such as calling navigator.id.logout().
-func (a *Policy) LogoutWithReponse(w http.ResponseWriter, r *http.Request) error {
+func (a *Policy) Logout(w http.ResponseWriter, r *http.Request) error {
 	// Find the nonce used to identify a client
 	token, err := r.Cookie("Authorization")
 	if err == nil || token.Value != "" {
 		// Invalidate the nonce
-		a.Logout(token.Value)
+		a.destroySession(token.Value)
 	}
 
 	// Clear the cookie from the client
-	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: "", Path: a.Path, Expires: time.Unix(0,0) })
+	http.SetCookie(w, &http.Cookie{Name: "Authorization", Value: "", Path: a.Path, Expires: time.Unix(0, 0)})
 	return nil
 }

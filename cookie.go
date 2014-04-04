@@ -246,7 +246,7 @@ func (a *Cookie) destroySession(nonce string) {
 // When the function is successful, redirection (http.StatusTemporaryRedirect) to the
 // a login page or public content is most likely the correct response.
 //
-// If the credentials cannot be verified, an error (ErrBadUsernameOrPassword) is
+// If the credentials cannot be verified, an error is
 // returned.  The caller is then responsable for creating an appropriate reponse to
 // the HTTP request.
 func (a *Cookie) Logout(w http.ResponseWriter, r *http.Request) error {

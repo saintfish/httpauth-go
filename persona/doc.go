@@ -9,4 +9,3 @@
 // package also provides an authentication policy that matches the interface provided by the
 // package httpauth-go.
 package persona
-

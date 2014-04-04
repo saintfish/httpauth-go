@@ -25,7 +25,7 @@ func (a *authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // NewHandler returns a http.Handler that checks the HTTP request's
 // credentials for authentication.  If successful, control will then
-// pass to handler.
+// pass to the specified handler.
 //
 // Note, if the handler requires access to the username from the credentials,
 // then this function is not useable.  Instead, you will need to work with

@@ -12,18 +12,18 @@ import (
 // An Authenticator is a caller supplied closure that can check the authorization
 // of user's credentials (i.e. a username and password pair).  The function should
 // return true only if the credentials can be successfully validated.
-type Authenticator func(username, password string) bool
+type Authenticator func(username, password, realm string) bool
 
 // A PasswordLookup is a caller supplied closure that can find the password
 // for a supplied username.  The function should return a empty string if
 // the user's password could not be determined.
-type PasswordLookup func(username string) string
+type PasswordLookup func(username, realm string) string
 
 // Authenticator converts the password lookup function into a closure
 // that validates a username/password pair.
 func (p PasswordLookup) Authenticator() Authenticator {
-	return func(username, password string) bool {
-		pwd := p(username)
+	return func(username, password, realm string) bool {
+		pwd := p(username, realm)
 		return pwd != "" && password == pwd
 	}
 }

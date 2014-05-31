@@ -21,8 +21,8 @@ var (
 )
 
 func init() {
-	basicAuth = NewBasic("golang", func(username, password string) bool {
-		return username == password
+	basicAuth = NewBasic("golang", func(username, password, realm string) bool {
+		return realm == "golang" && username == password
 	}, nil)
 }
 

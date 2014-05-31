@@ -182,7 +182,7 @@ func (a *Cookie) NotifyAuthRequired(w http.ResponseWriter, r *http.Request) {
 // If the credentials cannot be verified, an error will be returned (ErrBadUsernameOrPassword).
 func (a *Cookie) createSession(username, password string) (nonce string, err error) {
 	// Authorize the user
-	if !a.Auth(username, password) {
+	if !a.Auth(username, password, a.Realm) {
 		return "", ErrBadUsernameOrPassword
 	}
 

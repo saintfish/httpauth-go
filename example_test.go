@@ -16,7 +16,7 @@ func ExampleNewBasic() {
 	// Create an authorization policy that uses the basic authorization
 	// scheme.  The credientials will be considered valid if the password
 	// is simply the username repeated twice.
-	auth := NewBasic("My Website", func(username, password string) bool {
+	auth := NewBasic("My Website", func(username, password, realm string) bool {
 		return password == username+username
 	}, nil)
 	// The request handler
@@ -38,7 +38,7 @@ func ExampleNewBasic() {
 
 func ExamplePasswordLookup_Authenticator() {
 	// Create a dummy PasswordLookup for this example.
-	pl := PasswordLookup(func(username string) string {
+	pl := PasswordLookup(func(username, realm string) string {
 		// A user's password is their username with the digit '9' added
 		return username + "9"
 	})
@@ -56,7 +56,7 @@ func ExampleNewCookie() {
 	// Create an authorization policy that uses the cookie authorization
 	// scheme.  The credientials will be considered valid if the password
 	// is simply the username repeated twice.
-	auth := NewCookie("My Website", "/login", func(username, password string) bool {
+	auth := NewCookie("My Website", "/login", func(username, password, realm string) bool {
 		return password == username+username
 	})
 	// The request handler

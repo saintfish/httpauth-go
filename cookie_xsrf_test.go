@@ -17,8 +17,8 @@ var (
 )
 
 func init() {
-	cookieXsrfAuth = NewCookie("golang", "/cookie/login/", func(username, password string) bool {
-		return username == password
+	cookieXsrfAuth = NewCookie("golang", "/cookie/login/", func(username, password, realm string) bool {
+		return realm == "golang" && username == password
 	})
 	cookieXsrfAuth.RequireXsrfHeader = true
 }

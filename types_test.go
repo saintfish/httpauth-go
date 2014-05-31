@@ -9,16 +9,22 @@ import (
 )
 
 func TestPasswordLookup_Authenticator(t *testing.T) {
-	p := PasswordLookup(func(username string) string {
+	p := PasswordLookup(func(username, realm string) string {
+		if realm != "golang" {
+			return ""
+		}
 		return username + "_"
 	})
 
 	a := p.Authenticator()
 
-	if a("a", "a") {
+	if a("a", "a", "golang") {
 		t.Errorf("False positive")
 	}
-	if !a("a", "a_") {
+	if a("a", "a_", "c++") {
+		t.Errorf("False positive")
+	}
+	if !a("a", "a_", "golang") {
 		t.Errorf("False negative")
 	}
 }

@@ -24,9 +24,12 @@ var (
 
 func init() {
 	var err error
-	digestAuth, err = NewDigest("golang", func(username string) string {
+	digestAuth, err = NewDigest("golang", func(username, realm string) string {
+		if realm != "golang" {
+			return ""
+		}
 		return username
-	}, nil)
+	}, true, nil)
 	if err != nil {
 		panic(err)
 	}

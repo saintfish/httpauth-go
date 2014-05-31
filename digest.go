@@ -74,10 +74,11 @@ type Digest struct {
 	// CientCacheResidence controls how long client information is retained
 	ClientCacheResidence time.Duration
 
-	mutex   sync.Mutex
-	clients map[string]*digestClientInfo
-	lru     digestPriorityQueue
-	md5     hash.Hash
+	mutex         sync.Mutex
+	clients       map[string]*digestClientInfo
+	lru           digestPriorityQueue
+	md5           hash.Hash
+	plainPassword bool
 }
 
 func calcHash(h hash.Hash, data string) string {
@@ -87,7 +88,7 @@ func calcHash(h hash.Hash, data string) string {
 }
 
 // NewDigest creates a new authentication policy that uses the digest authentication scheme.
-func NewDigest(realm string, auth PasswordLookup, writer HtmlWriter) (*Digest, error) {
+func NewDigest(realm string, auth PasswordLookup, plainPassword bool, writer HtmlWriter) (*Digest, error) {
 	nonce, err := createNonce()
 	if err != nil {
 		return nil, err
@@ -106,7 +107,8 @@ func NewDigest(realm string, auth PasswordLookup, writer HtmlWriter) (*Digest, e
 		sync.Mutex{},
 		make(map[string]*digestClientInfo),
 		nil,
-		md5.New()}, nil
+		md5.New(),
+		plainPassword}, nil
 }
 
 func (a *Digest) evictLeastRecentlySeen() {
@@ -159,7 +161,7 @@ func parseDigestAuthHeader(r *http.Request) map[string]string {
 // returns the username only if the credientials could be validated.
 // If the return value is blank, then the credentials are missing,
 // invalid, or a system error prevented verification.
-func (a *Digest) Authorize(r *http.Request) (username string) {
+func (a *Digest) Authorize(r *http.Request) string {
 	// Extract and parse the token
 	params := parseDigestAuthHeader(r)
 	if params == nil {
@@ -174,20 +176,22 @@ func (a *Digest) Authorize(r *http.Request) (username string) {
 	// Verify if the requested URI matches auth header
 	switch u, err := url.Parse(params["uri"]); {
 	case err != nil || r.URL == nil:
-		return
+		return ""
 	case r.URL.Path != u.Path:
-		return
+		return ""
 	}
 
-	username = params["username"]
+	username := params["username"]
 	if username == "" {
 		return ""
 	}
-	password := a.Auth(username)
-	if password == "" {
+	ha1 := a.Auth(username, a.Realm)
+	if ha1 == "" {
 		return ""
 	}
-	ha1 := calcHash(a.md5, username+":"+a.Realm+":"+password)
+	if a.plainPassword {
+		ha1 = calcHash(a.md5, username+":"+a.Realm+":"+ha1)
+	}
 	ha2 := calcHash(a.md5, r.Method+":"+params["uri"])
 	ha3 := calcHash(a.md5, ha1+":"+params["nonce"]+":"+params["nc"]+
 		":"+params["cnonce"]+":"+params["qop"]+":"+ha2)

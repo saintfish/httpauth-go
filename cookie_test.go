@@ -21,8 +21,8 @@ const (
 )
 
 func init() {
-	cookieAuth = NewCookie("golang", "/cookie/login/", func(username, password string) bool {
-		return username == password
+	cookieAuth = NewCookie("golang", "/cookie/login/", func(username, password, realm string) bool {
+		return realm == "golang" && username == password
 	})
 }
 

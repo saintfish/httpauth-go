@@ -73,7 +73,7 @@ func (a *Basic) Authorize(r *http.Request) (username string) {
 		return ""
 	}
 
-	if !a.Auth(token[0:ndx], token[ndx+1:]) {
+	if !a.Auth(token[0:ndx], token[ndx+1:], a.Realm) {
 		return ""
 	}
 
